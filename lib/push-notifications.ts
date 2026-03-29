@@ -18,6 +18,8 @@ export async function registerForPushNotifications(): Promise<string | null> {
         shouldShowAlert: true,
         shouldPlaySound: true,
         shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
       }),
     });
 
