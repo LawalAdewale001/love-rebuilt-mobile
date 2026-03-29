@@ -6,7 +6,7 @@
 
 import axios, { type AxiosInstance } from 'axios';
 
-const DEFAULT_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://api.example.com';
+const DEFAULT_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://staging-api.loverebuilt.com';
 
 export type ApiClientConfig = {
   baseURL?: string;
@@ -36,17 +36,45 @@ export function createApiClient(config: ApiClientConfig = {}) {
     headers: defaultHeaders,
   });
 
+  // Unwrap backend envelope: { meta, data: { result } } → data.result (or data if no result key)
   instance.interceptors.response.use(
-    (response) => response,
+    (response) => {
+      const body = response.data;
+      if (body && typeof body === 'object' && 'data' in body && 'meta' in body) {
+        const inner = body.data;
+        // If data has only { result } and nothing else (e.g. no pagination), unwrap to result
+        // Otherwise keep data as-is so paginated responses retain their shape
+        if (inner && typeof inner === 'object' && 'result' in inner) {
+          const keys = Object.keys(inner);
+          response.data = keys.length === 1 ? inner.result : inner;
+        } else {
+          response.data = inner;
+        }
+      }
+      return response;
+    },
     (error) => {
       if (axios.isAxiosError(error)) {
-        const message =
-          (error.response?.data as { message?: string })?.message ??
-          error.message ??
-          `Request failed (${error.response?.status ?? 'unknown'})`;
-        const status = error.response?.status ?? 0;
-        const data = error.response?.data;
-        throw new ApiError(message, status, data);
+        const responseData = error.response?.data as
+          | { meta?: { message?: string | string[]; statusCode?: number }; message?: string | string[]; error?: string }
+          | undefined;
+
+        // Backend wraps errors in { meta: { message } } — fall back to top-level message
+        const rawMessage = responseData?.meta?.message ?? responseData?.message;
+
+        let message: string;
+        if (Array.isArray(rawMessage)) {
+          message = rawMessage.join('. ');
+        } else if (rawMessage) {
+          message = rawMessage;
+        } else if (responseData?.error) {
+          message = responseData.error;
+        } else {
+          message = 'Something went wrong. Please try again.';
+        }
+
+        const status = error.response?.status ?? responseData?.meta?.statusCode ?? 0;
+        throw new ApiError(message, status, responseData);
       }
       throw error;
     }

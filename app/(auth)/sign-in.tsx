@@ -1,6 +1,7 @@
 import {
   Box,
   Button,
+  ButtonSpinner,
   ButtonText,
   Divider,
   HStack,
@@ -13,19 +14,81 @@ import {
 } from "@gluestack-ui/themed";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
+import Joi from "joi";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView } from "react-native";
+
+import { showToast } from "@/components/ui/toast";
+import { useForm } from "@/hooks/use-form";
+import { ApiError } from "@/lib/api-client";
+import { useLoginMutation } from "@/lib/queries";
+import { registerForPushNotifications } from "@/lib/push-notifications";
+import { connectSocket } from "@/lib/socket";
+
+const loginSchema = Joi.object({
+  email: Joi.string()
+    .email({ tlds: { allow: false } })
+    .required()
+    .messages({
+      "string.empty": "Email is required",
+      "string.email": "Please enter a valid email address",
+    }),
+  password: Joi.string().min(6).required().messages({
+    "string.empty": "Password is required",
+    "string.min": "Password must be at least 6 characters",
+  }),
+});
 
 export default function SignInScreen() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
+  const loginMutation = useLoginMutation();
 
-  // States to track input values for dynamic styling
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const form = useForm(
+    { email: "", password: "" },
+    loginSchema
+  );
 
-  // Button becomes active when both fields have text
-  const isFormValid = email.trim().length > 0 && password.trim().length > 0;
+  const isFormFilled =
+    form.values.email.trim().length > 0 &&
+    form.values.password.trim().length > 0;
+  const canSubmit = isFormFilled && !loginMutation.isPending;
+
+  const emailError = form.getError("email");
+  const passwordError = form.getError("password");
+
+  const handleSignIn = async () => {
+    const validated = form.validate();
+    if (!validated) {
+      const firstError = form.fieldErrors.email ?? form.fieldErrors.password;
+      if (firstError) showToast("error", "Validation Error", firstError);
+      return;
+    }
+
+    // Get push token before login so we can send it with credentials
+    const pushToken = await registerForPushNotifications();
+
+    loginMutation.mutate(
+      {
+        email: validated.email,
+        password: validated.password,
+        devicePushToken: pushToken ?? undefined,
+      },
+      {
+        onSuccess: () => {
+          connectSocket();
+          router.replace("/(tabs)");
+        },
+        onError: (error) => {
+          const message =
+            error instanceof ApiError
+              ? error.message
+              : "Something went wrong. Please try again.";
+          showToast("error", "Sign In Failed", message);
+        },
+      }
+    );
+  };
 
   return (
     <Box flex={1} bg="#E86673">
@@ -36,9 +99,8 @@ export default function SignInScreen() {
         <ScrollView contentContainerStyle={{ flexGrow: 1 }} bounces={false}>
           {/* Top Graphic Area */}
           <Box h={350} w="100%" position="relative">
-            {/* Make sure to export your SignIn background graphic from Figma and put it in assets */}
             <Image
-              source={require("@/assets/images/signup-header-bg.png")} // Using your existing bg as placeholder, swap if needed!
+              source={require("@/assets/images/signup-header-bg.png")}
               style={{
                 width: "100%",
                 height: "100%",
@@ -73,71 +135,103 @@ export default function SignInScreen() {
 
               <VStack space="md" mt="$4">
                 {/* Email Input */}
-                <Input
-                  size="xl"
-                  variant="outline"
-                  borderRadius="$xl"
-                  bg={email ? "#FFFFFF" : "#F7F5F4"}
-                  borderWidth={email ? 1 : 0}
-                  borderColor={email ? "#1A1A1A" : "transparent"}
-                >
-                  {email ? (
-                    <Text
-                      position="absolute"
-                      top={6}
-                      left={16}
-                      size="xs"
-                      color="$textLight500"
-                    >
-                      Email Address
+                <Box>
+                  <Input
+                    size="xl"
+                    variant="outline"
+                    borderRadius="$xl"
+                    bg={form.values.email ? "#FFFFFF" : "#F7F5F4"}
+                    borderWidth={emailError ? 1 : form.values.email ? 1 : 0}
+                    borderColor={
+                      emailError
+                        ? "#E86673"
+                        : form.values.email
+                          ? "#1A1A1A"
+                          : "transparent"
+                    }
+                  >
+                    {form.values.email ? (
+                      <Text
+                        position="absolute"
+                        top={6}
+                        left={16}
+                        size="xs"
+                        color={emailError ? "#E86673" : "$textLight500"}
+                      >
+                        Email Address
+                      </Text>
+                    ) : null}
+                    <InputField
+                      placeholder={form.values.email ? "" : "Email Address"}
+                      placeholderTextColor="$textLight400"
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      value={form.values.email}
+                      onChangeText={(val: string) => form.setValue("email", val)}
+                      onBlur={() => form.onBlur("email")}
+                      pt={form.values.email ? "$4" : "$0"}
+                    />
+                  </Input>
+                  {emailError ? (
+                    <Text size="xs" color="#E86673" mt="$1" ml="$2">
+                      {emailError}
                     </Text>
                   ) : null}
-                  <InputField
-                    placeholder={email ? "" : "Email Address"}
-                    placeholderTextColor="$textLight400"
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    value={email}
-                    onChangeText={setEmail}
-                    pt={email ? "$4" : "$0"}
-                  />
-                </Input>
+                </Box>
 
                 {/* Password Input */}
-                <Input
-                  size="xl"
-                  variant="outline"
-                  borderRadius="$xl"
-                  bg={password ? "#FFFFFF" : "#F7F5F4"}
-                  borderWidth={password ? 1 : 0}
-                  borderColor={password ? "#1A1A1A" : "transparent"}
-                >
-                  {password ? (
-                    <Text
-                      position="absolute"
-                      top={6}
-                      left={16}
-                      size="xs"
-                      color="$textLight500"
+                <Box>
+                  <Input
+                    size="xl"
+                    variant="outline"
+                    borderRadius="$xl"
+                    bg={form.values.password ? "#FFFFFF" : "#F7F5F4"}
+                    borderWidth={
+                      passwordError ? 1 : form.values.password ? 1 : 0
+                    }
+                    borderColor={
+                      passwordError
+                        ? "#E86673"
+                        : form.values.password
+                          ? "#1A1A1A"
+                          : "transparent"
+                    }
+                  >
+                    {form.values.password ? (
+                      <Text
+                        position="absolute"
+                        top={6}
+                        left={16}
+                        size="xs"
+                        color={passwordError ? "#E86673" : "$textLight500"}
+                      >
+                        Password
+                      </Text>
+                    ) : null}
+                    <InputField
+                      type={showPassword ? "text" : "password"}
+                      placeholder={form.values.password ? "" : "Enter Password"}
+                      placeholderTextColor="$textLight400"
+                      value={form.values.password}
+                      onChangeText={(val: string) =>
+                        form.setValue("password", val)
+                      }
+                      onBlur={() => form.onBlur("password")}
+                      pt={form.values.password ? "$4" : "$0"}
+                    />
+                    <InputSlot
+                      pr="$4"
+                      onPress={() => setShowPassword(!showPassword)}
                     >
-                      Password
+                      <Text>👁️</Text>
+                    </InputSlot>
+                  </Input>
+                  {passwordError ? (
+                    <Text size="xs" color="#E86673" mt="$1" ml="$2">
+                      {passwordError}
                     </Text>
                   ) : null}
-                  <InputField
-                    type={showPassword ? "text" : "password"}
-                    placeholder={password ? "" : "Enter Password"}
-                    placeholderTextColor="$textLight400"
-                    value={password}
-                    onChangeText={setPassword}
-                    pt={password ? "$4" : "$0"}
-                  />
-                  <InputSlot
-                    pr="$4"
-                    onPress={() => setShowPassword(!showPassword)}
-                  >
-                    <Text>👁️</Text>
-                  </InputSlot>
-                </Input>
+                </Box>
               </VStack>
 
               <HStack alignItems="center" space="sm" my="$2">
@@ -171,20 +265,20 @@ export default function SignInScreen() {
                   alignItems="center"
                 >
                   <Text color="$white" fontWeight="bold">
-                    
+
                   </Text>
                 </Pressable>
               </HStack>
 
               <Button
                 size="xl"
-                bg={isFormValid ? "#E86673" : "#F4F3F2"}
+                bg={canSubmit ? "#E86673" : "#F4F3F2"}
                 borderRadius="$full"
                 mt="$4"
-                disabled={!isFormValid}
-                onPress={() => router.replace("/(tabs)")} // Assuming sign in takes them to the main app
+                disabled={!canSubmit}
+                onPress={handleSignIn}
                 style={
-                  isFormValid
+                  canSubmit
                     ? {
                         shadowColor: "#000",
                         shadowOffset: { width: 0, height: 2 },
@@ -195,12 +289,16 @@ export default function SignInScreen() {
                     : {}
                 }
               >
-                <ButtonText
-                  fontWeight="$bold"
-                  color={isFormValid ? "#FFFFFF" : "$textLight400"}
-                >
-                  Sign In
-                </ButtonText>
+                {loginMutation.isPending ? (
+                  <ButtonSpinner color="#FFFFFF" />
+                ) : (
+                  <ButtonText
+                    fontWeight="$bold"
+                    color={canSubmit ? "#FFFFFF" : "$textLight400"}
+                  >
+                    Sign In
+                  </ButtonText>
+                )}
               </Button>
 
               <HStack justifyContent="center" mt="$2">

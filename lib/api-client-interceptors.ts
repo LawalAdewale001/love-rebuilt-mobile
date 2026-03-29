@@ -4,13 +4,9 @@
  */
 
 import { axiosInstance } from '@/lib/api-client';
+import { clearAuth, getAccessToken } from '@/lib/auth-store';
+import { router } from 'expo-router';
 import type { InternalAxiosRequestConfig } from 'axios';
-
-/** Get the current access token (replace with your auth store/async storage). */
-function getAccessToken(): string | null {
-  // TODO: return from your auth context, Zustand store, or SecureStore
-  return null;
-}
 
 /** Attach auth header to outgoing requests. */
 axiosInstance.interceptors.request.use((config: InternalAxiosRequestConfig) => {
@@ -21,12 +17,13 @@ axiosInstance.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config;
 });
 
-/** Handle 401 (e.g. refresh token or redirect to login). */
+/** Handle 401 — clear auth state and redirect to login. */
 axiosInstance.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     if (error.response?.status === 401) {
-      // TODO: refresh token, clear auth state, or redirect to login
+      await clearAuth();
+      router.replace('/(auth)/sign-in');
     }
     return Promise.reject(error);
   }

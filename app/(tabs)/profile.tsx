@@ -1,4 +1,7 @@
 import { IconSymbol } from "@/components/ui/icon-symbol";
+import { clearAuth } from "@/lib/auth-store";
+import { queryClient } from "@/lib/query-client";
+import { disconnectSocket } from "@/lib/socket";
 import {
     Actionsheet,
     ActionsheetBackdrop,
@@ -20,6 +23,7 @@ import {
     VStack,
 } from "@gluestack-ui/themed";
 import { Image } from "expo-image";
+import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Switch } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -61,7 +65,17 @@ const BLOCKED_USERS = [
 ];
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const [activeSheet, setActiveSheet] = useState<EditSheetType>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    disconnectSocket();
+    await clearAuth();
+    queryClient.clear();
+    router.replace("/(auth)/sign-in");
+  };
 
   // Mock States for the forms
   const [showAge, setShowAge] = useState(true);
@@ -207,6 +221,21 @@ export default function ProfileScreen() {
               sheet="blockedUsers"
             />
           </VStack>
+
+          {/* Logout Button */}
+          <Button
+            size="xl"
+            variant="outline"
+            borderColor="#E86673"
+            borderRadius="$full"
+            mt="$6"
+            onPress={handleLogout}
+            disabled={loggingOut}
+          >
+            <ButtonText fontWeight="$bold" color="#E86673">
+              {loggingOut ? "Logging out..." : "Log Out"}
+            </ButtonText>
+          </Button>
         </VStack>
       </ScrollView>
 

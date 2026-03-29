@@ -30,7 +30,7 @@ import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DateTimePicker, {
   DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
@@ -45,6 +45,10 @@ import {
   TouchableWithoutFeedback,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { getAuthUser } from "@/lib/auth-store";
+import { useChatSocket } from "@/hooks/use-chat-socket";
+import { useInteractionMutation, useMessagesQuery, type ChatMessage } from "@/lib/queries";
+import { emitDeleteMessage, emitEditMessage, emitSendMessage, emitTyping } from "@/lib/socket";
 import { PRIMARY_COLOR } from "@/constants/theme";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -163,12 +167,16 @@ const GROUP_OPTIONS_MENU = [
 
 export default function ChatConversationScreen() {
   const router = useRouter();
-  const { name = "Patricia", id: chatId = "0", isGroup: isGroupParam } = useLocalSearchParams<{
+  const { name = "Patricia", id: chatId = "0", isGroup: isGroupParam, avatar: avatarParam, recipientId: recipientIdParam, isOnline: isOnlineParam } = useLocalSearchParams<{
     name: string;
     id: string;
     isGroup: string;
+    avatar: string;
+    recipientId: string;
+    isOnline: string;
   }>();
   const isGroup = isGroupParam === "1";
+  const currentUserId = getAuthUser()?.id ?? "";
   const compatKey = `compat_dismissed_${chatId}`;
   const joinedKey = `group_joined_${chatId}`;
   const [message, setMessage] = useState("");
@@ -176,9 +184,63 @@ export default function ChatConversationScreen() {
   const [showCompatibility, setShowCompatibility] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const likeScale = useRef(new Animated.Value(1)).current;
-  const [messages, setMessages] = useState<Message[]>(
-    isGroup ? MOCK_GROUP_MESSAGES : MOCK_MESSAGES
-  );
+  const interactionMutation = useInteractionMutation();
+
+  // Fetch real messages from API
+  const {
+    data: messagesData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useMessagesQuery(chatId);
+
+  // Map API messages to local Message format (reversed since API returns newest first)
+  const apiMessages: Message[] = useMemo(() => {
+    if (!messagesData?.pages) return [];
+    const allApiMsgs: ChatMessage[] = messagesData.pages.flatMap(
+      (page) => page.result ?? page
+    );
+    return allApiMsgs
+      .map((m) => ({
+        id: m.id,
+        text: m.content,
+        sent: m.senderId === currentUserId,
+        time: new Date(m.createdAt).toLocaleTimeString([], {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+        read: m.isRead,
+        sender: isGroup ? m.sender?.fullName : undefined,
+        replyTo: m.replyTo
+          ? {
+              id: m.replyTo.id,
+              text: m.replyTo.content,
+              sender: m.replyTo.sender?.fullName,
+            }
+          : undefined,
+        deleted: m.isDeleted,
+      }))
+      .reverse();
+  }, [messagesData, currentUserId, isGroup]);
+
+  // Local messages for optimistic sends — cleared when API data updates
+  const [localMessages, setLocalMessages] = useState<Message[]>([]);
+  const prevApiCountRef = useRef(0);
+  if (apiMessages.length !== prevApiCountRef.current) {
+    prevApiCountRef.current = apiMessages.length;
+    if (localMessages.length > 0) {
+      setLocalMessages([]);
+    }
+  }
+  const messages = [...apiMessages, ...localMessages];
+
+  // Socket: real-time events
+  const { typingUser, isRecipientOnline } = useChatSocket(chatId);
+  const isOnline = isRecipientOnline ?? isOnlineParam === "1";
+
+  // Typing debounce
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [contextMsg, setContextMsg] = useState<Message | null>(null);
   const [deleteMsg, setDeleteMsg] = useState<Message | null>(null);
@@ -378,9 +440,10 @@ export default function ChatConversationScreen() {
     if (!message.trim()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    // Edit mode
+    // Edit mode — emit via socket
     if (editingMsg) {
-      setMessages((prev) =>
+      emitEditMessage(editingMsg.id, message.trim());
+      setLocalMessages((prev) =>
         prev.map((m) =>
           m.id === editingMsg.id
             ? { ...m, text: message.trim(), edited: true }
@@ -392,6 +455,14 @@ export default function ChatConversationScreen() {
       return;
     }
 
+    // Send message via socket
+    emitSendMessage({
+      conversationId: chatId,
+      content: message.trim(),
+      replyToId: replyingTo?.id,
+    });
+
+    // Optimistic local message
     const newMsg: Message = {
       id: String(Date.now()),
       text: message.trim(),
@@ -406,20 +477,35 @@ export default function ChatConversationScreen() {
         sender: replyingTo.sender,
       };
     }
-    setMessages((prev) => [...prev, newMsg]);
+    setLocalMessages((prev) => [...prev, newMsg]);
     setMessage("");
     setReplyingTo(null);
+    emitTyping(chatId, false);
+  };
+
+  // Emit typing indicator on text input change
+  const handleTextChange = (text: string) => {
+    setMessage(text);
+    if (text.trim().length > 0) {
+      emitTyping(chatId, true);
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+      typingTimerRef.current = setTimeout(() => emitTyping(chatId, false), 2000);
+    } else {
+      emitTyping(chatId, false);
+    }
   };
 
   const handleDeleteForMe = (msg: Message) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+    emitDeleteMessage(msg.id, "me");
+    setLocalMessages((prev) => prev.filter((m) => m.id !== msg.id));
     setDeleteMsg(null);
   };
 
   const handleDeleteForEveryone = (msg: Message) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setMessages((prev) =>
+    emitDeleteMessage(msg.id, "everyone");
+    setLocalMessages((prev) =>
       prev.map((m) =>
         m.id === msg.id
           ? { ...m, text: "This message was deleted", deleted: true, replyTo: undefined, edited: false }
@@ -448,7 +534,7 @@ export default function ChatConversationScreen() {
             borderBottomWidth={1}
             borderBottomColor="#F4F3F2"
           >
-            <HStack alignItems="center" space="md" flex={1}>
+            <HStack alignItems="center" space="sm" flex={1}>
               <Pressable
                 onPress={() => router.back()}
                 w={36}
@@ -461,59 +547,96 @@ export default function ChatConversationScreen() {
                 <MaterialIcons name="arrow-back" size={20} color="#1A1A1A" />
               </Pressable>
 
-              <VStack>
-                <Text fontSize={17} fontWeight="$bold" color="#1A1A1A">
-                  {name}, 26
+              {/* Avatar */}
+              {avatarParam ? (
+                <Box w={36} h={36} borderRadius={18} overflow="hidden">
+                  <Image
+                    source={{ uri: avatarParam }}
+                    style={{ width: "100%", height: "100%" }}
+                    contentFit="cover"
+                  />
+                </Box>
+              ) : (
+                <Box
+                  w={36}
+                  h={36}
+                  borderRadius={18}
+                  bg="#F0C4C8"
+                  justifyContent="center"
+                  alignItems="center"
+                >
+                  <MaterialIcons name="person" size={20} color={PRIMARY_COLOR} />
+                </Box>
+              )}
+
+              <VStack flex={1}>
+                <Text
+                  fontSize={17}
+                  fontWeight="$bold"
+                  color="#1A1A1A"
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {name}
                 </Text>
-                <HStack alignItems="center" space="xs">
-                  <Box w={8} h={8} borderRadius={4} bg="#4CAF50" />
-                  <Text fontSize={12} color="#4CAF50">
-                    Online
-                  </Text>
-                </HStack>
+                {!isGroup && (
+                  <HStack alignItems="center" space="xs">
+                    <Box
+                      w={8}
+                      h={8}
+                      borderRadius={4}
+                      bg={isOnline ? "#4CAF50" : "#BDBDBD"}
+                    />
+                    <Text fontSize={12} color={isOnline ? "#4CAF50" : "#999999"}>
+                      {isOnline ? "Online" : "Offline"}
+                    </Text>
+                  </HStack>
+                )}
               </VStack>
             </HStack>
 
             <HStack alignItems="center" space="md">
-              <Pressable
-                onPress={() => {
-                  Haptics.impactAsync(
-                    isLiked
-                      ? Haptics.ImpactFeedbackStyle.Light
-                      : Haptics.ImpactFeedbackStyle.Medium
-                  );
-                  Animated.sequence([
-                    Animated.spring(likeScale, {
-                      toValue: 1.4,
-                      useNativeDriver: true,
-                      speed: 50,
-                      bounciness: 12,
-                    }),
-                    Animated.spring(likeScale, {
-                      toValue: 1,
-                      useNativeDriver: true,
-                      speed: 30,
-                      bounciness: 8,
-                    }),
-                  ]).start();
-                  setIsLiked(!isLiked);
-                }}
-              >
-                <Animated.View style={{ transform: [{ scale: likeScale }] }}>
-                  <HeartIcon size={28} isLiked={isLiked} />
-                </Animated.View>
-              </Pressable>
-              <Box
-                w={36}
-                h={36}
-                borderRadius={18}
-                bg="#F0C4C8"
-                justifyContent="center"
-                alignItems="center"
-                overflow="hidden"
-              >
-                <MaterialIcons name="person" size={20} color={PRIMARY_COLOR} />
-              </Box>
+              {!isGroup && recipientIdParam ? (
+                <Pressable
+                  disabled={interactionMutation.isPending}
+                  onPress={() => {
+                    const newLiked = !isLiked;
+                    Haptics.impactAsync(
+                      newLiked
+                        ? Haptics.ImpactFeedbackStyle.Medium
+                        : Haptics.ImpactFeedbackStyle.Light
+                    );
+                    Animated.sequence([
+                      Animated.spring(likeScale, {
+                        toValue: 1.4,
+                        useNativeDriver: true,
+                        speed: 50,
+                        bounciness: 12,
+                      }),
+                      Animated.spring(likeScale, {
+                        toValue: 1,
+                        useNativeDriver: true,
+                        speed: 30,
+                        bounciness: 8,
+                      }),
+                    ]).start();
+                    setIsLiked(newLiked);
+                    interactionMutation.mutate(
+                      {
+                        receiverId: recipientIdParam,
+                        type: newLiked ? "like" : "dislike",
+                      },
+                      {
+                        onError: () => setIsLiked(!newLiked),
+                      }
+                    );
+                  }}
+                >
+                  <Animated.View style={{ transform: [{ scale: likeScale }] }}>
+                    <HeartIcon size={28} isLiked={isLiked} />
+                  </Animated.View>
+                </Pressable>
+              ) : null}
               <Pressable onPress={() => setShowOptions(!showOptions)}>
                 <MaterialIcons name="more-vert" size={24} color="#1A1A1A" />
               </Pressable>
@@ -602,7 +725,23 @@ export default function ChatConversationScreen() {
             onContentSizeChange={() =>
               scrollViewRef.current?.scrollToEnd({ animated: true })
             }
+            onScroll={({ nativeEvent }) => {
+              // Load older messages when scrolled near top
+              if (
+                nativeEvent.contentOffset.y < 50 &&
+                hasNextPage &&
+                !isFetchingNextPage
+              ) {
+                fetchNextPage();
+              }
+            }}
+            scrollEventThrottle={400}
           >
+            {isFetchingNextPage && (
+              <Box py="$3" alignItems="center">
+                <Text fontSize={12} color="#999999">Loading older messages...</Text>
+              </Box>
+            )}
             {messages.map((msg) => (
               <Pressable
                 key={msg.id}
@@ -820,6 +959,15 @@ export default function ChatConversationScreen() {
             </Box>
           )}
 
+          {/* Typing indicator */}
+          {typingUser && (
+            <Box px="$5" py="$1" bg="#FFFFFF">
+              <Text fontSize={12} color="#999999" fontStyle="italic">
+                {typingUser} is typing...
+              </Text>
+            </Box>
+          )}
+
           {/* Message Input Bar */}
           <Box bg="#FFFFFF" borderTopWidth={1} borderTopColor="#F4F3F2">
               <HStack px="$4" py="$2" alignItems="center" space="sm">
@@ -846,7 +994,7 @@ export default function ChatConversationScreen() {
                         maxHeight: 90,
                       }}
                       value={message}
-                      onChangeText={setMessage}
+                      onChangeText={handleTextChange}
                       multiline
                       blurOnSubmit={false}
                     />

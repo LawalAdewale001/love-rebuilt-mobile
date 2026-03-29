@@ -1,13 +1,22 @@
 import { IconSymbol } from "@/components/ui/icon-symbol";
+import { useProfileQuery } from "@/lib/queries";
 import { Box, HStack, Pressable, Text, VStack } from "@gluestack-ui/themed";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+const DEFAULT_AVATAR = require("@/assets/images/home-avatar.png");
+
 export default function DiscoverScreen() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"forYou" | "nearby">("forYou");
+  const { data: profile } = useProfileQuery();
+
+  const firstName = profile?.fullName?.split(" ")[0] ?? "there";
+  const avatarSource = profile?.avatar
+    ? { uri: profile.avatar }
+    : DEFAULT_AVATAR;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
@@ -18,14 +27,14 @@ export default function DiscoverScreen() {
             {/* User Avatar */}
             <Box w={48} h={48} borderRadius="$full" overflow="hidden">
               <Image
-                source={require("@/assets/images/home-avatar.png")}
+                source={avatarSource}
                 style={{ width: "100%", height: "100%" }}
                 contentFit="cover"
               />
             </Box>
             <VStack>
               <Text size="sm" color="$textLight500">
-                Hello, Abiodun
+                Hello, {firstName}
               </Text>
               <Text size="lg" fontWeight="$bold" color="$textLight900">
                 Let's Find a Match
