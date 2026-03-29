@@ -44,7 +44,31 @@
           }
         }
       ],
-      "@react-native-community/datetimepicker",
+      [
+        "@react-native-community/datetimepicker",
+        {
+          "android": {
+            "datePicker": {
+              "colorAccent": "#E86A7A",
+              "colorPrimary": "#E86A7A",
+              "colorControlActivated": "#E86A7A",
+              "headerBackground": "#E86A7A",
+              "headerTextColor": "#FFFFFF",
+              "textColor": "#1A1A1A",
+              "textColorPrimary": "#1A1A1A"
+            },
+            "timePicker": {
+              "colorAccent": "#E86A7A",
+              "colorPrimary": "#E86A7A",
+              "colorControlActivated": "#E86A7A",
+              "headerBackground": "#E86A7A",
+              "headerTextColor": "#FFFFFF",
+              "textColor": "#1A1A1A",
+              "textColorPrimary": "#1A1A1A"
+            }
+          }
+        }
+      ],
       "expo-web-browser"
     ],
     "experiments": {

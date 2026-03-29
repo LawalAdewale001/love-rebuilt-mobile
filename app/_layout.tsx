@@ -74,6 +74,14 @@ export default function RootLayout() {
               name="course-completed"
               options={{ headerShown: false }}
             />
+            <Stack.Screen
+              name="chat-conversation"
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="call-screen"
+              options={{ headerShown: false }}
+            />
           </Stack>
           <StatusBar style="auto" />
         </ThemeProvider>
