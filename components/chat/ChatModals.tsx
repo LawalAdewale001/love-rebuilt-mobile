@@ -11,6 +11,7 @@ import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/dat
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import {
+  ActivityIndicator,
   Animated,
   Dimensions,
   Modal,
@@ -78,6 +79,14 @@ interface ChatModalsProps {
   setShowTimePicker: (v: boolean) => void;
   sheetAnim: Animated.Value;
   sheetPanResponder: PanResponderInstance;
+
+  // New props for Block / Report
+  onBlock?: () => void;
+  onReport?: (text: string) => void;
+  isBlocking?: boolean;
+  isUnblocking?: boolean;
+  isReporting?: boolean;
+  isDeleting?: boolean;
 }
 
 // ─── Drag handle sub-component ───────────────────────────────────────────────
@@ -132,7 +141,14 @@ export function ChatModals({
   setShowTimePicker,
   sheetAnim,
   sheetPanResponder,
+  onBlock,
+  onReport,
+  isBlocking,
+  isUnblocking,
+  isReporting,
+  isDeleting,
 }: ChatModalsProps) {
+  const isAnyActionInProgress = isBlocking || isUnblocking || isReporting || isDeleting;
   return (
     <>
       {/* ── Full-screen image viewer ── */}
@@ -158,19 +174,31 @@ export function ChatModals({
                   <Pressable borderWidth={1} borderColor={PRIMARY_COLOR} borderRadius={24} py="$2.5"
                     alignItems="center" mb="$3"
                     onPress={() => deleteMsg && onDeleteForEveryone(deleteMsg)}
+                    disabled={isAnyActionInProgress}
+                    opacity={isAnyActionInProgress ? 0.6 : 1}
                   >
-                    <Text fontSize={14} fontWeight="$semibold" color={PRIMARY_COLOR}>Delete for everyone</Text>
+                    {isDeleting ? (
+                      <ActivityIndicator size="small" color={PRIMARY_COLOR} />
+                    ) : (
+                      <Text fontSize={14} fontWeight="$semibold" color={PRIMARY_COLOR}>Delete for everyone</Text>
+                    )}
                   </Pressable>
                 )}
-
+ 
                 <Pressable borderWidth={1} borderColor={PRIMARY_COLOR} borderRadius={24} py="$2.5"
                   alignItems="center" mb="$3"
                   onPress={() => deleteMsg && onDeleteForMe(deleteMsg)}
+                  disabled={isAnyActionInProgress}
+                  opacity={isAnyActionInProgress ? 0.6 : 1}
                 >
-                  <Text fontSize={14} fontWeight="$semibold" color={PRIMARY_COLOR}>Delete for me</Text>
+                  {isDeleting ? (
+                    <ActivityIndicator size="small" color={PRIMARY_COLOR} />
+                  ) : (
+                    <Text fontSize={14} fontWeight="$semibold" color={PRIMARY_COLOR}>Delete for me</Text>
+                  )}
                 </Pressable>
-
-                <Pressable py="$2.5" alignItems="center" onPress={onCloseDeleteMsg}>
+ 
+                <Pressable py="$2.5" alignItems="center" onPress={onCloseDeleteMsg} disabled={isAnyActionInProgress}>
                   <Text fontSize={14} fontWeight="$semibold" color="#999999">Cancel</Text>
                 </Pressable>
               </Box>
@@ -323,11 +351,21 @@ export function ChatModals({
                       You will loose your love rate progress, if{"\n"}you proceed.
                     </Text>
                     <Pressable borderWidth={1.5} borderColor="#FFFFFF" borderRadius={28} py="$3"
-                      alignItems="center" mb="$3" onPress={onCloseSheet}
+                      alignItems="center" mb="$3" 
+                      onPress={() => {
+                        if (onBlock) onBlock();
+                        // Note: we don't close sheet here so user sees the progress
+                      }}
+                      disabled={isAnyActionInProgress}
+                      opacity={isAnyActionInProgress ? 0.6 : 1}
                     >
-                      <Text fontSize={16} fontWeight="$semibold" color="#FFFFFF">Yes</Text>
+                      {isBlocking ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Text fontSize={16} fontWeight="$semibold" color="#FFFFFF">Yes</Text>
+                      )}
                     </Pressable>
-                    <Pressable bg="#FFFFFF" borderRadius={28} py="$3" alignItems="center" onPress={onCloseSheet}>
+                    <Pressable bg="#FFFFFF" borderRadius={28} py="$3" alignItems="center" onPress={onCloseSheet} disabled={isAnyActionInProgress}>
                       <Text fontSize={16} fontWeight="$bold" color="#1A1A1A">No</Text>
                     </Pressable>
                   </Box>
@@ -344,18 +382,26 @@ export function ChatModals({
                         <TextInput value={reportText} onChangeText={setReportText} multiline
                           style={{ fontSize: 15, color: "#1A1A1A", minHeight: 110, textAlignVertical: "top" }}
                           placeholder="State your report" placeholderTextColor="#999999"
+                          editable={!isAnyActionInProgress}
                         />
                       </Box>
-                      <Pressable bg={reportText.trim() ? PRIMARY_COLOR : "#F5F3F0"} borderRadius={28} py="$3"
+                      <Pressable bg={reportText.trim() && !isAnyActionInProgress ? PRIMARY_COLOR : "#F5F3F0"} borderRadius={28} py="$3"
                         alignItems="center" mb="$3"
-                        onPress={reportText.trim() ? () => setReportStep("success") : undefined}
+                        onPress={() => {
+                          if (reportText.trim() && onReport) {
+                            onReport(reportText.trim());
+                          }
+                        }}
+                        disabled={!reportText.trim() || isAnyActionInProgress}
                       >
-                        <Text fontSize={16} fontWeight="$bold" color={reportText.trim() ? "#FFFFFF" : "#CCCCCC"}>
-                          Submit Report
-                        </Text>
+                        {isReporting ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <Text fontSize={16} fontWeight="$bold" color={reportText.trim() ? "#FFFFFF" : "#CCCCCC"}>Submit Report</Text>
+                        )}
                       </Pressable>
                       <Pressable borderWidth={1.5} borderColor="#1A1A1A" borderRadius={28} py="$3"
-                        alignItems="center" onPress={onCloseSheet}
+                        alignItems="center" onPress={onCloseSheet} disabled={isAnyActionInProgress}
                       >
                         <Text fontSize={16} fontWeight="$bold" color="#1A1A1A">Cancel</Text>
                       </Pressable>

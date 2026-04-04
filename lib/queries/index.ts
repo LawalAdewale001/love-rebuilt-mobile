@@ -15,6 +15,7 @@ export const queryKeys = {
   chats: () => [...queryKeys.all, 'chats'] as const,
   chatSearch: (query: string) => [...queryKeys.all, 'chatSearch', query] as const,
   messages: (conversationId: string) => [...queryKeys.all, 'messages', conversationId] as const,
+  blockedUsers: () => [...queryKeys.all, 'blockedUsers'] as const,
 };
 
 // ─── Auth types
@@ -238,10 +239,70 @@ export function useMessagesQuery(conversationId: string) {
   });
 }
 
+export function useConversationQuery(conversationId: string) {
+  const queryClient = useQueryClient();
+  return useQuery({
+    queryKey: [...queryKeys.chats(), conversationId],
+    queryFn: async () => {
+      try {
+        const response = await apiClient.get<ChatConversation>(`/api/chat/${conversationId}`);
+        // If meta/data structure is present, interceptors should have unwrapped it, 
+        // but if it returned raw data, we take it.
+        return response;
+      } catch (err) {
+        // Fallback: try to find the conversation in the chatted-list cache
+        const chatsCache = queryClient.getQueryData<any>(queryKeys.chats());
+        if (chatsCache?.pages) {
+          for (const page of chatsCache.pages) {
+            const found = page.result?.find((c: ChatConversation) => c.id === conversationId);
+            if (found) return found;
+          }
+        }
+        throw err;
+      }
+    },
+    enabled: !!conversationId,
+  });
+}
+
 // ─── Discovery interaction (like/dislike)
 export function useInteractionMutation() {
   return useMutation({
     mutationFn: (data: { receiverId: string; type: 'like' | 'dislike' }) =>
       apiClient.post('/api/discovery/interaction', data),
+  });
+}
+
+// ─── Block / Unblock / Report
+export function useBlockMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (blockedId: string) =>
+      apiClient.post('/api/chat/block', { blockedId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
+    },
+  });
+}
+
+export function useUnblockMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) =>
+      apiClient.delete(`/api/chat/unblock/${userId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
+    },
+  });
+}
+
+export function useReportMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { targetId: string; targetType: 'user' | 'group'; reason: string }) =>
+      apiClient.post('/api/chat/report', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
+    },
   });
 }

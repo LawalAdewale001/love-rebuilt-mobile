@@ -21,7 +21,7 @@ import * as Clipboard from "expo-clipboard";
 import * as DocumentPicker from "expo-document-picker";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Dimensions, KeyboardAvoidingView, PanResponder, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -33,7 +33,7 @@ import { ChatModals } from "@/components/chat/ChatModals";
 import { useChatSocket } from "@/hooks/use-chat-socket";
 import { useS3Upload } from "@/hooks/use-s3-upload";
 import { getAuthUser } from "@/lib/auth-store";
-import { queryKeys, useMessagesQuery, type ChatMessage as ApiChatMessage, type ChatConversation } from "@/lib/queries";
+import { queryKeys, useMessagesQuery, type ChatMessage as ApiChatMessage, type ChatConversation, useBlockMutation, useReportMutation, useConversationQuery, useUnblockMutation, useChatListQuery } from "@/lib/queries";
 import { emitDeleteMessage, emitEditMessage, emitSendMessage, emitTyping } from "@/lib/socket";
 
 import { MessageType, type ChatListItem, type ChatMessage, type SheetType } from "@/types/chat.types";
@@ -116,12 +116,32 @@ export default function ChatConversationScreen() {
     recipientId: string; isOnline: string; isLiked: string; lastSeen: string;
   }>();
 
+  const router = useRouter();
   const queryClient = useQueryClient();
 
   const isGroup = isGroupParam === "1";
   const currentUserId = getAuthUser()?.id ?? "";
   const compatKey = `compat_dismissed_${chatId}`;
   const joinedKey = `group_joined_${chatId}`;
+
+  // ── Conversation data (blocked status etc) ──────────────────────────────────
+  const { data: conversationData } = useConversationQuery(chatId);
+  const { data: chatListData } = useChatListQuery();
+  
+  const conversation = useMemo(() => {
+    if (conversationData) return conversationData;
+    // Fallback search in chat list cache
+    if (chatListData?.pages) {
+      for (const page of chatListData.pages) {
+        const found = page.result.find((c: ChatConversation) => c.id === chatId);
+        if (found) return found;
+      }
+    }
+    return null;
+  }, [conversationData, chatListData, chatId]);
+
+  const isBlocked = conversation?.isBlocked;
+  const blockedMe = conversation?.blockedMe;
 
   // ── Message state ──────────────────────────────────────────────────────────
   const { data: messagesData, fetchNextPage, hasNextPage, isFetchingNextPage, refetch, isLoading: isMessagesLoading } = useMessagesQuery(chatId);
@@ -157,6 +177,7 @@ export default function ChatConversationScreen() {
 
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Combine local optimistic messages with API messages
   const messages = useMemo(() => {
@@ -445,6 +466,53 @@ export default function ChatConversationScreen() {
     }
   };
 
+  const blockMutation = useBlockMutation();
+  const unblockMutation = useUnblockMutation();
+  const reportMutation = useReportMutation();
+
+  const handleBlock = async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await blockMutation.mutateAsync(recipientIdParam || "");
+      // Success is handled by mutation's onSuccess (invalidating chats)
+      // Navigate back to chat list
+      setTimeout(() => {
+        closeSheet();
+        router.back();
+      }, 500);
+    } catch (err) {
+      console.error("Failed to block user:", err);
+    }
+  };
+
+  const handleUnblock = async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await unblockMutation.mutateAsync(recipientIdParam || "");
+      // Success will refetch conversation via query invalidation
+    } catch (err) {
+      console.error("Failed to unblock user:", err);
+    }
+  };
+
+  const handleReport = async (reason: string) => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await reportMutation.mutateAsync({
+        targetId: isGroup ? chatId : (recipientIdParam || ""),
+        targetType: isGroup ? "group" : "user",
+        reason,
+      });
+      setReportStep("success");
+      // Optionally navigate back after a delay
+      setTimeout(() => {
+        router.push("/chats"); // explicitly go back to list
+      }, 2000);
+    } catch (err) {
+      console.error("Failed to report user/group:", err);
+    }
+  };
+
   // ── Chat actions ───────────────────────────────────────────────────────────
   const handleSend = () => {
     if (!message.trim()) return;
@@ -477,56 +545,76 @@ export default function ChatConversationScreen() {
     }
   };
 
-  const handleDeleteForMe = (msg: ChatMessage) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    // Optimistically hide from UI
-    const mid = msg.id;
-    setDeletedIds((prev) => new Set(prev).add(mid));
-
-    // Update Chat List cache immediately
-    queryClient.setQueryData(queryKeys.chats(), (old: any) => {
-      if (!old?.chats) return old;
-      return {
-        ...old,
-        chats: old.chats.map((c: ChatConversation) => (
-          c.id === chatId && c.lastMessage?.id === mid
-            ? { ...c, lastMessage: { ...c.lastMessage, isDeleted: true } }
-            : c
-        ))
-      };
-    });
-
-    if (!mid.startsWith("local-")) {
-      emitDeleteMessage(mid, "me");
+  const handleDeleteForMe = async (msg: ChatMessage) => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      setIsDeleting(true);
+      
+      const mid = msg.id;
+      if (!mid.startsWith("local-")) {
+        // We wrap it in a promise if socket emit doesn't provide one, 
+        // to show loading for a short while
+        await new Promise(resolve => {
+          emitDeleteMessage(mid, "me");
+          setTimeout(resolve, 500); // minimum loading feel
+        });
+      }
+      
+      setDeletedIds((prev) => new Set(prev).add(mid));
+      setLocalMessages((prev) => prev.filter((m) => m.id !== mid));
+      
+      // Update Chat List cache
+      queryClient.setQueryData(queryKeys.chats(), (old: any) => {
+        if (!old?.chats) return old;
+        return {
+          ...old,
+          chats: old.chats.map((c: ChatConversation) => (
+            c.id === chatId && c.lastMessage?.id === mid
+              ? { ...c, lastMessage: { ...c.lastMessage, isDeleted: true } }
+              : c
+          ))
+        };
+      });
+      
+      setDeleteMsg(null);
+    } finally {
+      setIsDeleting(false);
     }
-    setLocalMessages((prev) => prev.filter((m) => m.id !== mid));
-    setDeleteMsg(null);
   };
-
-  const handleDeleteForEveryone = (msg: ChatMessage) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const mid = msg.id;
-    setDeletedIds((prev) => new Set(prev).add(mid));
-
-    // Update Chat List cache immediately
-    queryClient.setQueryData(queryKeys.chats(), (old: any) => {
-      if (!old?.chats) return old;
-      return {
-        ...old,
-        chats: old.chats.map((c: ChatConversation) => (
-          c.id === chatId && c.lastMessage?.id === mid
-            ? { ...c, lastMessage: { ...c.lastMessage, isDeleted: true } }
-            : c
-        ))
-      };
-    });
-
-    if (!mid.startsWith("local-")) {
-      emitDeleteMessage(mid, "everyone");
+ 
+  const handleDeleteForEveryone = async (msg: ChatMessage) => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      setIsDeleting(true);
+      
+      const mid = msg.id;
+      if (!mid.startsWith("local-")) {
+        await new Promise(resolve => {
+          emitDeleteMessage(mid, "everyone");
+          setTimeout(resolve, 500); 
+        });
+      }
+ 
+      setDeletedIds((prev) => new Set(prev).add(mid));
+      setLocalMessages((prev) => prev.map((m) => m.id === mid ? { ...m, text: "This message was deleted", deleted: true, replyTo: undefined, edited: false } : m));
+      
+      // Update Chat List cache
+      queryClient.setQueryData(queryKeys.chats(), (old: any) => {
+        if (!old?.chats) return old;
+        return {
+          ...old,
+          chats: old.chats.map((c: ChatConversation) => (
+            c.id === chatId && c.lastMessage?.id === mid
+              ? { ...c, lastMessage: { ...c.lastMessage, isDeleted: true } }
+              : c
+          ))
+        };
+      });
+      
+      setDeleteMsg(null);
+    } finally {
+      setIsDeleting(false);
     }
-    // Optimistically update local state for deleted state
-    setLocalMessages((prev) => prev.map((m) => m.id === mid ? { ...m, text: "This message was deleted", deleted: true, replyTo: undefined, edited: false } : m));
-    setDeleteMsg(null);
   };
 
   const dismissCompatibility = useCallback(() => {
@@ -552,6 +640,9 @@ export default function ChatConversationScreen() {
             showOptions={showOptions}
             setShowOptions={setShowOptions}
             openSheet={openSheet}
+            isBlocked={!!isBlocked}
+            onUnblock={handleUnblock}
+            isUnblocking={unblockMutation.isPending}
           />
 
           {/* Upload Status Overlay */}
@@ -637,6 +728,10 @@ export default function ChatConversationScreen() {
             isGroup={isGroup}
             inputBarPanResponder={inputBarPanResponder}
             conversationPartnerName={name}
+            isBlocked={isBlocked}
+            blockedMe={blockedMe}
+            onUnblock={handleUnblock}
+            isUnblocking={unblockMutation.isPending}
           />
         </Box>
       </KeyboardAvoidingView>
@@ -697,6 +792,12 @@ export default function ChatConversationScreen() {
         setShowTimePicker={setShowTimePicker}
         sheetAnim={sheetAnim}
         sheetPanResponder={sheetPanResponder}
+        onBlock={handleBlock}
+        onReport={handleReport}
+        isBlocking={blockMutation.isPending}
+        isUnblocking={unblockMutation.isPending}
+        isReporting={reportMutation.isPending}
+        isDeleting={isDeleting}
       />
     </SafeAreaView>
   );

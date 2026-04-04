@@ -11,7 +11,7 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Box, HStack, Pressable, Text, VStack } from "@gluestack-ui/themed";
 import { Image } from "expo-image";
 import { useRef } from "react";
-import { Animated } from "react-native";
+import { ActivityIndicator, Animated } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useInteractionMutation } from "@/lib/queries";
@@ -44,6 +44,9 @@ interface ChatHeaderProps {
   showOptions: boolean;
   setShowOptions: (v: boolean) => void;
   openSheet: (type: SheetType) => void;
+  isBlocked: boolean;
+  onUnblock: () => void;
+  isUnblocking?: boolean;
 }
 
 export function ChatHeader({
@@ -59,6 +62,9 @@ export function ChatHeader({
   showOptions,
   setShowOptions,
   openSheet,
+  isBlocked,
+  onUnblock,
+  isUnblocking,
 }: ChatHeaderProps) {
   const router = useRouter();
   const likeScale = useRef(new Animated.Value(1)).current;
@@ -150,8 +156,8 @@ export function ChatHeader({
               </Animated.View>
             </Pressable>
           )}
-          <Pressable onPress={() => setShowOptions(!showOptions)} disabled={isUploading}>
-            <MaterialIcons name="more-vert" size={24} color={isUploading ? "#BDBDBD" : "#1A1A1A"} />
+          <Pressable onPress={() => setShowOptions(!showOptions)} disabled={isUploading || isUnblocking}>
+            <MaterialIcons name="more-vert" size={24} color={(isUploading || isUnblocking) ? "#BDBDBD" : "#1A1A1A"} />
           </Pressable>
         </HStack>
       </HStack>
@@ -181,6 +187,12 @@ export function ChatHeader({
                 setShowOptions(false);
                 if (option.callType) {
                   router.push({ pathname: "/call-screen", params: { name, type: option.callType } });
+                } else if (option.label === "Block" || option.label === "Unblock") {
+                  if (isBlocked) {
+                    onUnblock();
+                  } else {
+                    openSheet("block");
+                  }
                 } else if (option.sheet) {
                   openSheet(option.sheet);
                 }
@@ -188,10 +200,15 @@ export function ChatHeader({
               px="$4"
               py="$3"
             >
-              <HStack alignItems="center" space="md">
-                {option.icon}
+              <HStack alignItems="center" space="md" opacity={(isUploading || isUnblocking) ? 0.6 : 1}>
+                {option.label === "Block" && isBlocked && isUnblocking ? (
+                  <ActivityIndicator size="small" color={PRIMARY_COLOR} />
+                ) : (
+                  option.icon
+                )}
                 <Text fontSize={14} color="#1A1A1A" numberOfLines={1} ellipsizeMode="tail" flex={1}>
-                  {option.label}{option.appendName ? ` ${name}` : ""}
+                  {option.label === "Block" ? (isBlocked ? (isUnblocking ? "Unblocking..." : "Unblock") : "Block") : option.label}
+                  {option.appendName ? ` ${name}` : ""}
                 </Text>
               </HStack>
             </Pressable>

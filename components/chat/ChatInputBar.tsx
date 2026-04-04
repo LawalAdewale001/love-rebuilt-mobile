@@ -6,6 +6,7 @@ import { Box, HStack, Pressable, ScrollView, Text } from "@gluestack-ui/themed";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, PanResponder, PanResponderInstance, TextInput } from "react-native";
 import * as Haptics from "expo-haptics";
+import { ActivityIndicator } from "react-native";
 
 
 const COMPATIBILITY_QUESTIONS = [
@@ -49,6 +50,10 @@ interface ChatInputBarProps {
   isGroup: boolean;
   inputBarPanResponder: PanResponderInstance;
   conversationPartnerName: string;
+  isBlocked?: boolean;
+  blockedMe?: boolean;
+  onUnblock?: () => void;
+  isUnblocking?: boolean;
 }
 
 export function ChatInputBar({
@@ -80,6 +85,10 @@ export function ChatInputBar({
   isGroup,
   inputBarPanResponder,
   conversationPartnerName,
+  isBlocked,
+  blockedMe,
+  onUnblock,
+  isUnblocking,
 }: ChatInputBarProps) {
   const formatTime = (secs: number) =>
     `${Math.floor(secs / 60).toString().padStart(2, "0")}:${(secs % 60).toString().padStart(2, "0")}`;
@@ -198,7 +207,7 @@ export function ChatInputBar({
       <Box bg="#FFFFFF" borderTopWidth={1} borderTopColor="#F4F3F2">
 
         {/* ── Normal Input ── */}
-        {!isRecording && !recordedUri && (
+        {!isRecording && !recordedUri && !isBlocked && !blockedMe && (
           <HStack px="$4" py="$2" alignItems="center" space="sm">
             <Pressable w={36} h={36} justifyContent="center" alignItems="center"
               onPress={onImagePick} disabled={isUploading}
@@ -252,6 +261,34 @@ export function ChatInputBar({
               )}
             </Pressable>
           </HStack>
+        )}
+
+        {/* ── Blocked Banner ── */}
+        {(isBlocked || blockedMe) && (
+          <Box px="$4" py="$3" alignItems="center" justifyContent="center">
+            <Pressable
+              onPress={isBlocked && !isUnblocking ? onUnblock : undefined}
+              bg="#F5F5F5"
+              px="$6"
+              py="$1.5"
+              borderRadius={12}
+              w="100%"
+              minHeight={44}
+              alignItems="center"
+              justifyContent="center"
+              disabled={isUnblocking}
+            >
+              {isUnblocking ? (
+                <ActivityIndicator size="small" color={PRIMARY_COLOR} />
+              ) : (
+                <Text fontSize={14} color="#666666" textAlign="center">
+                  {isBlocked 
+                    ? "You blocked this contact. Tap to unblock." 
+                    : "You cannot message this contact."}
+                </Text>
+              )}
+            </Pressable>
+          </Box>
         )}
 
         {/* ── Recording Waveform with Swipe-to-Cancel ── */}
