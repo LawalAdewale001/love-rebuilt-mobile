@@ -84,7 +84,7 @@ export type ChatMember = {
   isOnline: boolean;
   lastSeen: string | null;
   joinedAt: string;
-  lastReadAt: string;
+  lastReadAt?: string;
   isBlocked: boolean;
   isLiked: boolean;
 };
@@ -111,7 +111,7 @@ export type ChatConversation = {
   totalMembers: number;
   isBlocked: boolean;
   blockedMe: boolean;
-  unreadCount: number;
+  unreadCount?: number;
 };
 
 type ChatListResponse = {
@@ -163,7 +163,7 @@ export function useChatSearchQuery(query: string) {
     queryKey: queryKeys.chatSearch(query),
     queryFn: () =>
       apiClient.get<ChatSearchResult>('/api/chat/search', {
-        params: { q: query },
+        params: { query },
       }),
     enabled: query.trim().length > 0,
   });

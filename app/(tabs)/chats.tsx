@@ -52,7 +52,7 @@ type ChatOption = {
 
 /** For direct chats, find the other person's name, avatar, userId, and online status. */
 function getDirectChatDisplay(chat: ChatConversation, currentUserId: string) {
-  const other = chat.members.find((m) => m.userId !== currentUserId);
+  const other = chat.members?.find((m) => m.userId !== currentUserId);
   return {
     name: other?.name ?? chat.name,
     avatar: other?.avatar ?? null,
@@ -119,13 +119,19 @@ export default function ChatsScreen() {
   const { data: searchData, isLoading: isSearchLoading } =
     useChatSearchQuery(debouncedSearch);
 
+  useEffect(() => {
+    if (isSearching && searchData) {
+      console.log("Chat search response:", JSON.stringify(searchData, null, 2));
+    }
+  }, [isSearching, searchData]);
+
   // Typing status across all chats
   const { typingMap } = useAllChatsSocket();
 
   const allChats =
     chatListData?.pages.flatMap((page) => page.result ?? page) ?? [];
 
-  const filteredChats = isSearching
+  const filteredChats: ChatConversation[] = isSearching
     ? (searchData?.chats ?? [])
     : activeTab === "groups"
       ? allChats.filter((c) => c.type === "group")
@@ -183,7 +189,7 @@ export default function ChatsScreen() {
     ({ item: chat }: { item: ChatConversation }) => {
       const isGroup = chat.type === "group";
       const display = isGroup
-        ? { name: chat.name, avatar: chat.image, userId: "", isOnline: false, isLiked: false }
+        ? { name: chat.name, avatar: chat.image, userId: "", isOnline: false, isLiked: false, lastSeen: null }
         : getDirectChatDisplay(chat, currentUserId);
 
       const lastMessageText = chat.lastMessage?.content ?? null;
@@ -212,7 +218,7 @@ export default function ChatsScreen() {
         >
           <HStack px="$5" py="$3" alignItems="center" space="md">
             {/* Unread dot */}
-            {chat.unreadCount > 0 ? (
+            {(chat.unreadCount ?? 0) > 0 ? (
               <Box w={8} h={8} borderRadius={6} bg={PRIMARY_COLOR} />
             ) : (
               <Box w={8} h={8} />
