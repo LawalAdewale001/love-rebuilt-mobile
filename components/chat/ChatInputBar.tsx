@@ -1,10 +1,12 @@
 import { CameraIcon, MicrophoneIcon, SendIcon } from "@/components/ui/chat-icons";
+import { PRIMARY_COLOR } from "@/constants/theme";
+import type { ChatMessage } from "@/types/chat.types";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Box, HStack, Pressable, ScrollView, Text } from "@gluestack-ui/themed";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, PanResponder, PanResponderInstance, TextInput } from "react-native";
-import { PRIMARY_COLOR } from "@/constants/theme";
-import type { ChatMessage } from "@/types/chat.types";
+import * as Haptics from "expo-haptics";
+
 
 const COMPATIBILITY_QUESTIONS = [
   "What are your financial values?",
@@ -96,6 +98,7 @@ export function ChatInputBar({
     },
     onPanResponderRelease: (_, g) => {
       if (g.dx < -80) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         onCancelRecording();
       }
       Animated.spring(swipeX, {
@@ -221,7 +224,10 @@ export function ChatInputBar({
                 <Pressable
                   pr="$3"
                   pb="$2.5"
-                  onPress={onStartRecording}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    onStartRecording();
+                  }}
                   onLongPress={onFilePick}
                   disabled={isUploading}
                 >
@@ -230,11 +236,17 @@ export function ChatInputBar({
               </HStack>
             </Box>
 
-            <Pressable w={40} h={40} bg={isUploading ? "#CCCCCC" : PRIMARY_COLOR} borderRadius={20}
-              justifyContent="center" alignItems="center" onPress={onSend} disabled={isUploading}
+            <Pressable w={40} h={40} bg={isUploading ? "#CCCCCC" : PRIMARY_COLOR}
+              borderRadius={20}
+              justifyContent="center" alignItems="center" 
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                onSend();
+              }} 
+              disabled={isUploading}
             >
               {isUploading ? (
-                 <MaterialIcons name="hourglass-empty" size={18} color="#FFFFFF" />
+                <MaterialIcons name="hourglass-empty" size={18} color="#FFFFFF" />
               ) : (
                 <SendIcon size={18} color="#FFFFFF" />
               )}
@@ -261,16 +273,21 @@ export function ChatInputBar({
                 <Text fontSize={12} color="#E53935" fontWeight="$medium">{formatTime(recordingSeconds)}</Text>
                 <Box flex={1} alignItems="center">
                   <Text fontSize={13} color={isCancelled ? "#E53935" : "#999999"}>
-                    {isCancelled ? "Release to cancel" : "<  Swipe to cancel"}
+                    Recording...
                   </Text>
                 </Box>
               </HStack>
             </Box>
 
-            <Pressable w={36} h={36} justifyContent="center" alignItems="center"
-              onPress={onStopRecording}
+            <Pressable w={44} h={44} bg="#F5F5F5" borderRadius={22}
+              borderWidth={1} borderColor="#E0E0E0"
+              justifyContent="center" alignItems="center"
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                onStopRecording();
+              }}
             >
-              <MaterialIcons name="stop" size={22} color="#4A4A4A" />
+              <MaterialIcons name="stop" size={22} color="#E53935" />
             </Pressable>
           </HStack>
         )}
@@ -278,7 +295,13 @@ export function ChatInputBar({
         {/* ── Post-recording Playback ── */}
         {!isRecording && recordedUri && (
           <HStack px="$4" py="$2" alignItems="center" space="sm" minHeight={56}>
-            <Pressable w={36} h={36} justifyContent="center" alignItems="center" onPress={onCancelVoiceNote} disabled={isUploading}>
+            <Pressable w={36} h={36} justifyContent="center" alignItems="center" 
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                onCancelVoiceNote();
+              }} 
+              disabled={isUploading}
+            >
               <MaterialIcons name="delete" size={22} color={isUploading ? "#CCCCCC" : "#E53935"} />
             </Pressable>
 
@@ -304,7 +327,11 @@ export function ChatInputBar({
 
             <Pressable w={44} h={44} bg={isUploading ? "#CCCCCC" : PRIMARY_COLOR}
               borderRadius={22} justifyContent="center" alignItems="center"
-              onPress={onSendVoiceNote} disabled={isUploading}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                onSendVoiceNote();
+              }} 
+              disabled={isUploading}
             >
               {isUploading
                 ? <MaterialIcons name="hourglass-empty" size={20} color="#FFFFFF" />
@@ -316,8 +343,8 @@ export function ChatInputBar({
 
         {/* Swipe-up handle (private chats only) */}
         {!isGroup && (
-          <Box {...inputBarPanResponder.panHandlers} alignItems="center" pb="$1" pt="$1">
-            <Box w={120} h={4} borderRadius={3} bg="#1A1A1A" />
+          <Box {...inputBarPanResponder.panHandlers} alignItems="center" pb="$2" pt="$1">
+            <Box w={40} h={4} borderRadius={2} bg="#E0E0E0" />
           </Box>
         )}
       </Box>

@@ -64,8 +64,10 @@ export function emitSendMessage(data: {
   replyToId?: string;
   mediaUrl?: string;
   type?: MessageType;
-}) {
-  socket?.emit("sendMessage", data);
+}, callback?: (response: any) => void) {
+  socket?.emit("sendMessage", data, (response: any) => {
+    callback?.(response);
+  });
 }
 
 export function emitTyping(conversationId: string, isTyping: boolean) {

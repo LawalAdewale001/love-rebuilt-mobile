@@ -59,6 +59,8 @@ export function useChatSocket(conversationId: string) {
       queryClient.invalidateQueries({
         queryKey: queryKeys.messages(conversationId),
       });
+      // Update chat list if this was the last message
+      queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
     };
 
     // ─── Message deleted
@@ -71,6 +73,8 @@ export function useChatSocket(conversationId: string) {
       queryClient.invalidateQueries({
         queryKey: queryKeys.messages(conversationId),
       });
+      // Update chat list if this was the last message
+      queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
     };
 
     // ─── User online/offline status

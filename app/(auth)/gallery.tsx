@@ -1,16 +1,6 @@
 import { OnboardingHeader } from "@/components/ui/onboarding-header";
-import {
-    Box,
-    Button,
-    ButtonText,
-    HStack,
-    Pressable,
-    ScrollView,
-    Text,
-    Textarea,
-    TextareaInput,
-    VStack,
-} from "@gluestack-ui/themed";
+import { Box, Button, ButtonText, HStack, Pressable, ScrollView, Text, Textarea, TextareaInput, VStack } from "@gluestack-ui/themed";
+import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
@@ -114,9 +104,7 @@ export default function GalleryScreen() {
                         onPress={() => removeImage(index)}
                       >
                         {/* Optional: Add a trash icon here. Using simple text for placeholder */}
-                        <Text color="white" size="xs" fontWeight="bold">
-                          X
-                        </Text>
+                        <Ionicons name="close" size={16} color="white" />
                       </Pressable>
                     </Box>
                   ) : (
@@ -132,9 +120,7 @@ export default function GalleryScreen() {
                       onPress={pickImage}
                     >
                       {/* You can map a camera icon here. Using text as placeholder */}
-                      <Text color="#E86673" size="lg">
-                        📷
-                      </Text>
+                        <Ionicons name="camera-outline" size={32} color="#E86673" />
                     </Pressable>
                   )}
                 </Box>
@@ -144,9 +130,9 @@ export default function GalleryScreen() {
             {/* Bio Input */}
             <Box
               borderWidth={1}
-              borderColor="#1A1A1A"
-              borderRadius="$xl"
-              bg="#F7F5F4"
+              borderColor="#E0E0E0"
+              borderRadius="$2xl"
+              bg="#F9F9F9"
               overflow="hidden"
             >
               <Textarea

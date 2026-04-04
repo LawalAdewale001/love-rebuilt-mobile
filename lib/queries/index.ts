@@ -106,6 +106,7 @@ export type ChatConversation = {
     type: string;
     senderId: string;
     createdAt: string;
+    isDeleted?: boolean;
   } | null;
   members: ChatMember[];
   totalMembers: number;

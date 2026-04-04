@@ -81,6 +81,25 @@ function formatTime(dateStr: string) {
   return date.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
+function ChatListSkeleton() {
+  return (
+    <Box flex={1} px="$5" py="$3">
+      {Array.from({ length: 8 }).map((_, i) => (
+        <HStack key={i} space="md" alignItems="center" mb="$5">
+          <Box w={40} h={40} borderRadius={20} bg="#F5F5F5" opacity={0.6} />
+          <VStack space="xs" flex={1}>
+            <HStack justifyContent="space-between">
+              <Box w="40%" h={15} bg="#F5F5F5" borderRadius={4} opacity={0.6} />
+              <Box w="15%" h={12} bg="#F5F5F5" borderRadius={4} opacity={0.6} />
+            </HStack>
+            <Box w="80%" h={12} bg="#F5F5F5" borderRadius={4} opacity={0.6} />
+          </VStack>
+        </HStack>
+      ))}
+    </Box>
+  );
+}
+
 export default function ChatsScreen() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"all" | "groups">("all");
@@ -341,26 +360,32 @@ export default function ChatsScreen() {
                 </Text>
               ) : chat.lastMessage ? (
                 <HStack alignItems="center" space="xs">
-                  {chat.lastMessage.type === MessageType.IMAGE && (
-                    <MaterialIcons name="camera-alt" size={14} color="#999999" />
-                  )}
-                  {chat.lastMessage.type === MessageType.AUDIO && (
-                    <MaterialIcons name="mic" size={14} color="#999999" />
-                  )}
-                  {chat.lastMessage.type === MessageType.FILE && (
-                    <MaterialIcons name="insert-drive-file" size={14} color="#999999" />
-                  )}
-                  {chat.lastMessage.type === MessageType.VIDEO && (
-                    <MaterialIcons name="videocam" size={14} color="#999999" />
+                  {!chat.lastMessage.isDeleted && (
+                    <>
+                      {chat.lastMessage.type === MessageType.IMAGE && (
+                        <MaterialIcons name="camera-alt" size={14} color="#999999" />
+                      )}
+                      {chat.lastMessage.type === MessageType.AUDIO && (
+                        <MaterialIcons name="mic" size={14} color="#999999" />
+                      )}
+                      {chat.lastMessage.type === MessageType.FILE && (
+                        <MaterialIcons name="insert-drive-file" size={14} color="#999999" />
+                      )}
+                      {chat.lastMessage.type === MessageType.VIDEO && (
+                        <MaterialIcons name="videocam" size={14} color="#999999" />
+                      )}
+                    </>
                   )}
                   <Text fontSize={13} color="#999999" numberOfLines={1} flex={1}>
-                    {chat.lastMessage.type === MessageType.TEXT
-                      ? chat.lastMessage.content
-                      : chat.lastMessage.type === MessageType.AUDIO
-                        ? "Voice note"
-                        : chat.lastMessage.type === MessageType.FILE
-                          ? "Document"
-                          : chat.lastMessage.type.charAt(0).toUpperCase() + chat.lastMessage.type.slice(1)}
+                    {chat.lastMessage.isDeleted
+                      ? "This message was deleted"
+                      : chat.lastMessage.type === MessageType.TEXT
+                        ? chat.lastMessage.content
+                        : chat.lastMessage.type === MessageType.AUDIO
+                          ? "Voice note"
+                          : chat.lastMessage.type === MessageType.FILE
+                            ? "Document"
+                            : chat.lastMessage.type.charAt(0).toUpperCase() + chat.lastMessage.type.slice(1)}
                   </Text>
                 </HStack>
               ) : typingMap[chat.id] ? (
@@ -471,9 +496,7 @@ export default function ChatsScreen() {
 
         {/* Chat List */}
         {isLoading ? (
-          <Box flex={1} justifyContent="center" alignItems="center">
-            <ActivityIndicator size="large" color={PRIMARY_COLOR} />
-          </Box>
+          <ChatListSkeleton />
         ) : (
           <FlatList
             data={filteredChats}

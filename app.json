@@ -69,7 +69,21 @@
           }
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app needs access to your photos to let you set your profile picture.",
+          "cameraPermission": "The app needs access to your camera to let you take a profile picture.",
+          "colors": {
+            "cropToolbarColor": "#FFFFFF",
+            "cropToolbarIconColor": "#1A1A1A",
+            "cropToolbarActionTextColor": "#E86A7A",
+            "cropBackButtonIconColor": "#1A1A1A",
+            "cropBackgroundColor": "#FFFFFF"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

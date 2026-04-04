@@ -14,15 +14,16 @@ import { PRIMARY_COLOR } from "@/constants/theme";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Box, FlatList, Text, VStack } from "@gluestack-ui/themed";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
+import { useQueryClient } from "@tanstack/react-query";
 import { Audio } from "expo-av";
 import * as Clipboard from "expo-clipboard";
 import * as DocumentPicker from "expo-document-picker";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams } from "expo-router";
-import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Animated, Dimensions, KeyboardAvoidingView, PanResponder, Platform, View } from "react-native";
+import { ActivityIndicator, Animated, Dimensions, KeyboardAvoidingView, PanResponder, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { ChatHeader } from "@/components/chat/ChatHeader";
@@ -32,10 +33,10 @@ import { ChatModals } from "@/components/chat/ChatModals";
 import { useChatSocket } from "@/hooks/use-chat-socket";
 import { useS3Upload } from "@/hooks/use-s3-upload";
 import { getAuthUser } from "@/lib/auth-store";
-import { useMessagesQuery, type ChatMessage as ApiChatMessage } from "@/lib/queries";
+import { queryKeys, useMessagesQuery, type ChatMessage as ApiChatMessage, type ChatConversation } from "@/lib/queries";
 import { emitDeleteMessage, emitEditMessage, emitSendMessage, emitTyping } from "@/lib/socket";
 
-import { type ChatListItem, type ChatMessage, type SheetType, MessageType } from "@/types/chat.types";
+import { MessageType, type ChatListItem, type ChatMessage, type SheetType } from "@/types/chat.types";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -84,6 +85,20 @@ function EmptyChatState({ name }: { name: string }) {
   );
 }
 
+function ChatLoadingSkeleton() {
+  return (
+    <Box flex={1} py="$5" px="$5">
+      <VStack space="xl">
+        <Box w="60%" h={40} bg="#F5F5F5" borderRadius={15} alignSelf="flex-start" opacity={0.6} />
+        <Box w="70%" h={40} bg="#FCEFEF" borderRadius={15} alignSelf="flex-end" opacity={0.6} />
+        <Box w="40%" h={40} bg="#F5F5F5" borderRadius={15} alignSelf="flex-start" opacity={0.6} />
+        <Box w="80%" h={40} bg="#FCEFEF" borderRadius={15} alignSelf="flex-end" opacity={0.6} />
+        <Box w="50%" h={40} bg="#F5F5F5" borderRadius={15} alignSelf="flex-start" opacity={0.6} />
+      </VStack>
+    </Box>
+  );
+}
+
 // ─── Screen ─────────────────────────────────────────────────────────────────
 
 export default function ChatConversationScreen() {
@@ -101,13 +116,15 @@ export default function ChatConversationScreen() {
     recipientId: string; isOnline: string; isLiked: string; lastSeen: string;
   }>();
 
+  const queryClient = useQueryClient();
+
   const isGroup = isGroupParam === "1";
   const currentUserId = getAuthUser()?.id ?? "";
   const compatKey = `compat_dismissed_${chatId}`;
   const joinedKey = `group_joined_${chatId}`;
 
   // ── Message state ──────────────────────────────────────────────────────────
-  const { data: messagesData, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } = useMessagesQuery(chatId);
+  const { data: messagesData, fetchNextPage, hasNextPage, isFetchingNextPage, refetch, isLoading: isMessagesLoading } = useMessagesQuery(chatId);
 
   useFocusEffect(
     useCallback(() => {
@@ -120,8 +137,8 @@ export default function ChatConversationScreen() {
     const allApiMsgs: ApiChatMessage[] = messagesData.pages.flatMap((page: any) => page.result || []);
     return allApiMsgs.map((m) => {
       const mappedType = m.type === "voice" ? MessageType.AUDIO :
-                         m.type === "pdf" ? MessageType.FILE :
-                         m.type as MessageType;
+        m.type === "pdf" ? MessageType.FILE :
+          m.type as MessageType;
       return {
         id: m.id,
         text: m.content || undefined,
@@ -139,21 +156,34 @@ export default function ChatConversationScreen() {
   }, [messagesData, currentUserId, isGroup]);
 
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
-  const prevApiCountRef = useRef(0);
-  if (apiMessages.length !== prevApiCountRef.current) {
-    prevApiCountRef.current = apiMessages.length;
-    if (localMessages.length > 0) setLocalMessages([]);
-  }
-  const messages = [...localMessages, ...apiMessages];
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
+
+  // Combine local optimistic messages with API messages
+  const messages = useMemo(() => {
+    // Only show local messages that haven't appeared in apiMessages yet
+    // AND filter out any messages that we've optimistically deleted
+    const filteredLocal = localMessages.filter(
+      (local) => !apiMessages.some((api) => api.id === local.id) && !deletedIds.has(local.id)
+    );
+    const filteredApi = apiMessages.filter((api) => !deletedIds.has(api.id));
+
+    return [...filteredLocal, ...filteredApi];
+  }, [localMessages, apiMessages, deletedIds]);
 
   const addOptimisticMessage = (data: Partial<ChatMessage>) => {
+    const tempId = `local-${Date.now()}`;
     const newMsg: ChatMessage = {
-      id: String(Date.now()), sent: true, time: "Now",
+      id: tempId, sent: true, time: "Now",
       createdAt: new Date().toISOString(), read: false, ...data,
     };
     if (replyingTo) newMsg.replyTo = { id: replyingTo.id, text: replyingTo.text, sender: replyingTo.sender };
     setLocalMessages((prev) => [newMsg, ...prev]);
+    return tempId;
   };
+
+  const updateMessageId = useCallback((tempId: string, realId: string) => {
+    setLocalMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, id: realId } : m));
+  }, []);
 
   // ── Socket ─────────────────────────────────────────────────────────────────
   const { typingUser, isRecipientOnline } = useChatSocket(chatId);
@@ -366,21 +396,33 @@ export default function ChatConversationScreen() {
     const uri = recordedUri; setRecordedUri(null); setRecordingSeconds(0);
     const result = await upload(uri, `voice_note_${Date.now()}.m4a`, "audio/m4a");
     if (result) {
-      emitSendMessage({ conversationId: chatId, type: MessageType.AUDIO, mediaUrl: result.fileUrl });
-      addOptimisticMessage({ type: MessageType.AUDIO, mediaUrl: result.fileUrl });
+      const tempId = addOptimisticMessage({ type: MessageType.AUDIO, mediaUrl: result.fileUrl });
+      emitSendMessage(
+        { conversationId: chatId, type: MessageType.AUDIO, mediaUrl: result.fileUrl },
+        (res) => {
+          const realId = res?.id || res?.data?.id || res?.result?.id;
+          if (realId) updateMessageId(tempId, realId);
+        }
+      );
     }
   };
 
   // ── Media upload helpers ───────────────────────────────────────────────────
   const handleImagePick = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, quality: 0.8 });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: false, aspect: [1, 1], quality: 0.8 });
     if (!result.canceled && result.assets[0].uri) {
       const { uri } = result.assets[0];
       const fileName = `chat_image_${Date.now()}.jpg`;
       const res = await upload(uri, fileName, "image/jpeg");
       if (res) {
-        emitSendMessage({ conversationId: chatId, type: MessageType.IMAGE, mediaUrl: res.fileUrl });
-        addOptimisticMessage({ type: MessageType.IMAGE, mediaUrl: res.fileUrl });
+        const tempId = addOptimisticMessage({ type: MessageType.IMAGE, mediaUrl: res.fileUrl });
+        emitSendMessage(
+          { conversationId: chatId, type: MessageType.IMAGE, mediaUrl: res.fileUrl },
+          (resSync) => {
+            const realId = resSync?.id || resSync?.data?.id || resSync?.result?.id;
+            if (realId) updateMessageId(tempId, realId);
+          }
+        );
       }
     }
   };
@@ -391,8 +433,14 @@ export default function ChatConversationScreen() {
       const { uri, name: fileName } = result.assets[0];
       const res = await upload(uri, fileName, "application/pdf");
       if (res) {
-        emitSendMessage({ conversationId: chatId, type: MessageType.FILE, mediaUrl: res.fileUrl });
-        addOptimisticMessage({ type: MessageType.FILE, mediaUrl: res.fileUrl });
+        const tempId = addOptimisticMessage({ type: MessageType.FILE, mediaUrl: res.fileUrl });
+        emitSendMessage(
+          { conversationId: chatId, type: MessageType.FILE, mediaUrl: res.fileUrl },
+          (resSync) => {
+            const realId = resSync?.id || resSync?.data?.id || resSync?.result?.id;
+            if (realId) updateMessageId(tempId, realId);
+          }
+        );
       }
     }
   };
@@ -406,8 +454,14 @@ export default function ChatConversationScreen() {
       setLocalMessages((prev) => prev.map((m) => m.id === editingMsg.id ? { ...m, text: message.trim(), edited: true } : m));
       setMessage(""); setEditingMsg(null); return;
     }
-    emitSendMessage({ conversationId: chatId, content: message.trim(), replyToId: replyingTo?.id, type: MessageType.TEXT });
-    addOptimisticMessage({ text: message.trim(), type: MessageType.TEXT });
+    const tempId = addOptimisticMessage({ text: message.trim(), type: MessageType.TEXT });
+    emitSendMessage(
+      { conversationId: chatId, content: message.trim(), replyToId: replyingTo?.id, type: MessageType.TEXT },
+      (res) => {
+        const realId = res?.id || res?.data?.id || res?.result?.id;
+        if (realId) updateMessageId(tempId, realId);
+      }
+    );
     setMessage(""); setReplyingTo(null);
     emitTyping(chatId, false);
   };
@@ -425,15 +479,53 @@ export default function ChatConversationScreen() {
 
   const handleDeleteForMe = (msg: ChatMessage) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    emitDeleteMessage(msg.id, "me");
-    setLocalMessages((prev) => prev.filter((m) => m.id !== msg.id));
+    // Optimistically hide from UI
+    const mid = msg.id;
+    setDeletedIds((prev) => new Set(prev).add(mid));
+
+    // Update Chat List cache immediately
+    queryClient.setQueryData(queryKeys.chats(), (old: any) => {
+      if (!old?.chats) return old;
+      return {
+        ...old,
+        chats: old.chats.map((c: ChatConversation) => (
+          c.id === chatId && c.lastMessage?.id === mid
+            ? { ...c, lastMessage: { ...c.lastMessage, isDeleted: true } }
+            : c
+        ))
+      };
+    });
+
+    if (!mid.startsWith("local-")) {
+      emitDeleteMessage(mid, "me");
+    }
+    setLocalMessages((prev) => prev.filter((m) => m.id !== mid));
     setDeleteMsg(null);
   };
 
   const handleDeleteForEveryone = (msg: ChatMessage) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    emitDeleteMessage(msg.id, "everyone");
-    setLocalMessages((prev) => prev.map((m) => m.id === msg.id ? { ...m, text: "This message was deleted", deleted: true, replyTo: undefined, edited: false } : m));
+    const mid = msg.id;
+    setDeletedIds((prev) => new Set(prev).add(mid));
+
+    // Update Chat List cache immediately
+    queryClient.setQueryData(queryKeys.chats(), (old: any) => {
+      if (!old?.chats) return old;
+      return {
+        ...old,
+        chats: old.chats.map((c: ChatConversation) => (
+          c.id === chatId && c.lastMessage?.id === mid
+            ? { ...c, lastMessage: { ...c.lastMessage, isDeleted: true } }
+            : c
+        ))
+      };
+    });
+
+    if (!mid.startsWith("local-")) {
+      emitDeleteMessage(mid, "everyone");
+    }
+    // Optimistically update local state for deleted state
+    setLocalMessages((prev) => prev.map((m) => m.id === mid ? { ...m, text: "This message was deleted", deleted: true, replyTo: undefined, edited: false } : m));
     setDeleteMsg(null);
   };
 
@@ -473,43 +565,47 @@ export default function ChatConversationScreen() {
           )}
 
           {/* Message List */}
-          <FlatList
-            ref={flatListRef}
-            data={getFlattenedMessages(messages)}
-            inverted={messages.length > 0}
-            keyExtractor={(item: any) => item.id}
-            onEndReached={() => hasNextPage && fetchNextPage()}
-            onEndReachedThreshold={0.5}
-            ListHeaderComponent={isFetchingNextPage ? (
-              <Box py="$3" alignItems="center">
-                <Text fontSize={12} color="#999999">Loading older messages...</Text>
-              </Box>
-            ) : null}
-            ListEmptyComponent={<EmptyChatState name={name} />}
-            renderItem={({ item }) => {
-              const msg = item as ChatListItem;
-              if ("isHeader" in msg) {
-                return (
-                  <Box alignItems="center" py="$4">
-                    <Box bg="#F0F0F0" px="$3" py="$1" borderRadius={12}>
-                      <Text fontSize={11} color="#666666" fontWeight="$medium">{msg.title}</Text>
+          {isMessagesLoading ? (
+            <ChatLoadingSkeleton />
+          ) : (
+            <FlatList
+              ref={flatListRef}
+              data={getFlattenedMessages(messages)}
+              inverted={messages.length > 0}
+              keyExtractor={(item: any) => item.id}
+              onEndReached={() => hasNextPage && fetchNextPage()}
+              onEndReachedThreshold={0.5}
+              ListHeaderComponent={isFetchingNextPage ? (
+                <Box py="$3" alignItems="center">
+                  <Text fontSize={12} color="#999999">Loading older messages...</Text>
+                </Box>
+              ) : null}
+              ListEmptyComponent={<EmptyChatState name={name} />}
+              renderItem={({ item }) => {
+                const msg = item as ChatListItem;
+                if ("isHeader" in msg) {
+                  return (
+                    <Box alignItems="center" py="$4">
+                      <Box bg="#F0F0F0" px="$3" py="$1" borderRadius={12}>
+                        <Text fontSize={11} color="#666666" fontWeight="$medium">{msg.title}</Text>
+                      </Box>
                     </Box>
-                  </Box>
+                  );
+                }
+                return (
+                  <ChatMessageBubble
+                    msg={msg}
+                    isGroup={isGroup}
+                    conversationPartnerName={name}
+                    onLongPress={setContextMsg}
+                    onImagePress={setFullScreenImage}
+                  />
                 );
-              }
-              return (
-                <ChatMessageBubble
-                  msg={msg}
-                  isGroup={isGroup}
-                  conversationPartnerName={name}
-                  onLongPress={setContextMsg}
-                  onImagePress={setFullScreenImage}
-                />
-              );
-            }}
-            contentContainerStyle={{ flexGrow: 1, paddingVertical: 16 }}
-            style={{ flex: 1 }}
-          />
+              }}
+              contentContainerStyle={{ flexGrow: 1, paddingVertical: 16 }}
+              style={{ flex: 1 }}
+            />
+          )}
 
           {/* Input Bar (with banners + recording) */}
           <ChatInputBar
