@@ -36,9 +36,23 @@ export function createApiClient(config: ApiClientConfig = {}) {
     headers: defaultHeaders,
   });
 
+  // Request logging
+  instance.interceptors.request.use((config) => {
+    if (['post', 'put', 'patch'].includes(config.method?.toLowerCase() || '')) {
+      console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`);
+      console.log(JSON.stringify(config.data, null, 2));
+    }
+    return config;
+  });
+
   // Unwrap backend envelope: { meta, data: { result } } → data.result (or data if no result key)
   instance.interceptors.response.use(
     (response) => {
+      const config = response.config;
+      if (['post', 'put', 'patch'].includes(config.method?.toLowerCase() || '')) {
+        console.log(`[API Response] ${config.method?.toUpperCase()} ${config.url}`);
+        console.log(JSON.stringify(response.data, null, 2));
+      }
       const body = response.data;
       if (body && typeof body === 'object' && 'data' in body && 'meta' in body) {
         const inner = body.data;

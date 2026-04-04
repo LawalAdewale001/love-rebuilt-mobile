@@ -1,285 +1,201 @@
-import {
-  BlockOptionIcon,
-  CallOptionIcon,
-  CameraIcon,
-  CurvyStarburstFrame,
-  DualStarburstFrame,
-  HeartIcon,
-  LeaveGroupOptionIcon,
-  MicrophoneIcon,
-  PlanMeetupOptionIcon,
-  ReportOptionIcon,
-  SendIcon,
-  VideoCallOptionIcon,
-} from "@/components/ui/chat-icons";
-import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import {
-  Box,
-  HStack,
-  Input,
-  InputField,
-  InputIcon,
-  InputSlot,
-  Pressable,
-  ScrollView,
-  Text,
-  VStack,
-} from "@gluestack-ui/themed";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Clipboard from "expo-clipboard";
-import * as Haptics from "expo-haptics";
-import { Image } from "expo-image";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import DateTimePicker, {
-  DateTimePickerEvent,
-} from "@react-native-community/datetimepicker";
-import {
-  Animated,
-  Dimensions,
-  KeyboardAvoidingView,
-  Modal,
-  PanResponder,
-  Platform,
-  TextInput,
-  TouchableWithoutFeedback,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { getAuthUser } from "@/lib/auth-store";
-import { useChatSocket } from "@/hooks/use-chat-socket";
-import { useInteractionMutation, useMessagesQuery, type ChatMessage } from "@/lib/queries";
-import { emitDeleteMessage, emitEditMessage, emitSendMessage, emitTyping } from "@/lib/socket";
+/**
+ * ChatConversationScreen — orchestration layer.
+ *
+ * All UI is delegated to sub-components in components/chat/:
+ *   ChatHeader     — top bar + options dropdown
+ *   ChatMessageBubble / ChatContextMenu — message rendering & long-press actions
+ *   ChatInputBar   — text input, recording waveform, playback, banners
+ *   ChatModals     — delete / forward / questionnaire / bottom sheets
+ *
+ * Upload logic lives in hooks/use-s3-upload.ts (XHR-based, S3 presigned POST).
+ */
+
 import { PRIMARY_COLOR } from "@/constants/theme";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { Box, FlatList, Text, VStack } from "@gluestack-ui/themed";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Audio } from "expo-av";
+import * as Clipboard from "expo-clipboard";
+import * as DocumentPicker from "expo-document-picker";
+import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
+import { useLocalSearchParams } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Animated, Dimensions, KeyboardAvoidingView, PanResponder, Platform, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+import { ChatHeader } from "@/components/chat/ChatHeader";
+import { ChatInputBar } from "@/components/chat/ChatInputBar";
+import { ChatContextMenu, ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
+import { ChatModals } from "@/components/chat/ChatModals";
+import { useChatSocket } from "@/hooks/use-chat-socket";
+import { useS3Upload } from "@/hooks/use-s3-upload";
+import { getAuthUser } from "@/lib/auth-store";
+import { useMessagesQuery, type ChatMessage as ApiChatMessage } from "@/lib/queries";
+import { emitDeleteMessage, emitEditMessage, emitSendMessage, emitTyping } from "@/lib/socket";
+
+import { type ChatListItem, type ChatMessage, type SheetType, MessageType } from "@/types/chat.types";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-type Message = {
-  id: string;
-  text: string;
-  sent: boolean;
-  time: string;
-  read?: boolean;
-  sender?: string;
-  replyTo?: { id: string; text: string; sender?: string };
-  edited?: boolean;
-  deleted?: boolean;
-};
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
-// Mock messages — sent = current user (right, pink), received = other person (left, gray)
-const MOCK_MESSAGES: Message[] = [
-  {
-    id: "1",
-    text: "Can't wait for the results! Hope everything goes smoothly.",
-    sent: false,
-    time: "9:30 AM",
-    read: true,
-  },
-  {
-    id: "2",
-    text: "Can we plan our first meet up, at your own location?",
-    sent: true,
-    time: "9:32 AM",
-    read: true,
-  },
-  {
-    id: "3",
-    text: "Yeah sure, I will prepare myself and know what next.",
-    sent: false,
-    time: "9:35 AM",
-    read: false,
-  },
-];
+function getFlattenedMessages(msgs: ChatMessage[]): ChatListItem[] {
+  const flattened: ChatListItem[] = [];
+  let lastDate = "";
+  msgs.forEach((m) => {
+    const date = new Date(m.createdAt).toLocaleDateString("en-US", {
+      month: "long", day: "numeric", year: "numeric",
+    });
+    if (date !== lastDate) {
+      if (lastDate !== "") flattened.push({ title: lastDate, isHeader: true, id: `header-${lastDate}` });
+      lastDate = date;
+    }
+    flattened.push(m);
+  });
+  if (lastDate !== "") flattened.push({ title: lastDate, isHeader: true, id: `header-${lastDate}` });
+  return flattened;
+}
 
-const MOCK_GROUP_MESSAGES: Message[] = [
-  {
-    id: "1",
-    text: "I love man u team alot",
-    sent: false,
-    time: "9:30 AM",
-    sender: "james",
-  },
-  {
-    id: "2",
-    text: "Same here!",
-    sent: false,
-    time: "9:31 AM",
-    sender: "patrica",
-  },
-  {
-    id: "3",
-    text: "I love man u team alot",
-    sent: false,
-    time: "9:32 AM",
-    sender: "james",
-    replyTo: { id: "1", text: "I love man u team alot", sender: "james" },
-  },
-  {
-    id: "4",
-    text: "that team is not good at all",
-    sent: false,
-    time: "9:33 AM",
-    sender: "blessing",
-  },
-  {
-    id: "5",
-    text: "Leave man u oo, them no sabi.",
-    sent: false,
-    time: "9:34 AM",
-    sender: "AJ",
-  },
-  {
-    id: "6",
-    text: "Man u for mold",
-    sent: false,
-    time: "9:35 AM",
-    sender: "jackson",
-  },
-];
+function EmptyChatState({ name }: { name: string }) {
+  return (
+    <Box flex={1} justifyContent="center" alignItems="center" px="$10">
+      <VStack alignItems="center" space="md">
+        <Box
+          w={80}
+          h={80}
+          borderRadius={40}
+          bg="#FCEFEF"
+          justifyContent="center"
+          alignItems="center"
+          mb="$2"
+        >
+          <MaterialIcons name="chat-bubble-outline" size={40} color={PRIMARY_COLOR} />
+        </Box>
+        <Text fontSize={18} fontWeight="$600" color="#1A1A1A" textAlign="center">
+          No Messages Yet
+        </Text>
+        <Text fontSize={14} color="#999999" textAlign="center">
+          Say hi to {name}! Start a conversation and get to know each other better.
+        </Text>
+      </VStack>
+    </Box>
+  );
+}
 
-const COMPATIBILITY_QUESTIONS = [
-  "What are your financial values?",
-  "What is Parenting style?",
-  "How do you handle conflict?",
-  "What are your love languages?",
-];
-
-const CONNECTION_OPTIONS = [
-  "Casual chat",
-  "Getting Serious",
-  "Dating",
-  "Exclusive",
-];
-
-type SheetType = "leave" | "block" | "report" | "joinGroup" | "planMeetup" | null;
-
-const PRIVATE_OPTIONS_MENU = [
-  { label: "Call", appendName: true, icon: <CallOptionIcon size={24} />, sheet: null as SheetType, callType: "voice" as string | null },
-  { label: "Video Call", appendName: true, icon: <VideoCallOptionIcon size={24} />, sheet: null as SheetType, callType: "video" as string | null },
-  { label: "Plan a meetup", appendName: false, icon: <PlanMeetupOptionIcon size={24} />, sheet: "planMeetup" as SheetType, callType: null as string | null },
-  { label: "Block", appendName: false, icon: <BlockOptionIcon size={24} />, sheet: "block" as SheetType, callType: null as string | null },
-  { label: "Report", appendName: false, icon: <ReportOptionIcon size={24} />, sheet: "report" as SheetType, callType: null as string | null },
-];
-
-const GROUP_OPTIONS_MENU = [
-  { label: "Leave Group", appendName: false, icon: <LeaveGroupOptionIcon size={24} />, sheet: "leave" as SheetType, callType: null as string | null },
-  { label: "Report Group", appendName: false, icon: <ReportOptionIcon size={24} />, sheet: "report" as SheetType, callType: null as string | null },
-];
+// ─── Screen ─────────────────────────────────────────────────────────────────
 
 export default function ChatConversationScreen() {
-  const router = useRouter();
-  const { name = "Patricia", id: chatId = "0", isGroup: isGroupParam, avatar: avatarParam, recipientId: recipientIdParam, isOnline: isOnlineParam } = useLocalSearchParams<{
-    name: string;
-    id: string;
-    isGroup: string;
-    avatar: string;
-    recipientId: string;
-    isOnline: string;
+  const {
+    name = "Chat",
+    id: chatId = "0",
+    isGroup: isGroupParam,
+    avatar: avatarParam,
+    recipientId: recipientIdParam,
+    isOnline: isOnlineParam,
+    isLiked: isLikedParam,
+    lastSeen: lastSeenParam,
+  } = useLocalSearchParams<{
+    name: string; id: string; isGroup: string; avatar: string;
+    recipientId: string; isOnline: string; isLiked: string; lastSeen: string;
   }>();
+
   const isGroup = isGroupParam === "1";
   const currentUserId = getAuthUser()?.id ?? "";
   const compatKey = `compat_dismissed_${chatId}`;
   const joinedKey = `group_joined_${chatId}`;
-  const [message, setMessage] = useState("");
-  const [showOptions, setShowOptions] = useState(false);
-  const [showCompatibility, setShowCompatibility] = useState(false);
-  const [isLiked, setIsLiked] = useState(false);
-  const likeScale = useRef(new Animated.Value(1)).current;
-  const interactionMutation = useInteractionMutation();
 
-  // Fetch real messages from API
-  const {
-    data: messagesData,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = useMessagesQuery(chatId);
+  // ── Message state ──────────────────────────────────────────────────────────
+  const { data: messagesData, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } = useMessagesQuery(chatId);
 
-  // Map API messages to local Message format (reversed since API returns newest first)
-  const apiMessages: Message[] = useMemo(() => {
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
+
+  const apiMessages: ChatMessage[] = useMemo(() => {
     if (!messagesData?.pages) return [];
-    const allApiMsgs: ChatMessage[] = messagesData.pages.flatMap(
-      (page) => page.result ?? page
-    );
-    return allApiMsgs
-      .map((m) => ({
+    const allApiMsgs: ApiChatMessage[] = messagesData.pages.flatMap((page: any) => page.result || []);
+    return allApiMsgs.map((m) => {
+      const mappedType = m.type === "voice" ? MessageType.AUDIO :
+                         m.type === "pdf" ? MessageType.FILE :
+                         m.type as MessageType;
+      return {
         id: m.id,
-        text: m.content,
+        text: m.content || undefined,
         sent: m.senderId === currentUserId,
-        time: new Date(m.createdAt).toLocaleTimeString([], {
-          hour: "numeric",
-          minute: "2-digit",
-        }),
+        createdAt: m.createdAt,
+        time: new Date(m.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
         read: m.isRead,
         sender: isGroup ? m.sender?.fullName : undefined,
-        replyTo: m.replyTo
-          ? {
-              id: m.replyTo.id,
-              text: m.replyTo.content,
-              sender: m.replyTo.sender?.fullName,
-            }
-          : undefined,
+        replyTo: m.replyTo ? { id: m.replyTo.id, text: m.replyTo.content, sender: m.replyTo.sender?.fullName } : undefined,
         deleted: m.isDeleted,
-      }))
-      .reverse();
+        type: mappedType,
+        mediaUrl: m.mediaUrl || undefined,
+      };
+    });
   }, [messagesData, currentUserId, isGroup]);
 
-  // Local messages for optimistic sends — cleared when API data updates
-  const [localMessages, setLocalMessages] = useState<Message[]>([]);
+  const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
   const prevApiCountRef = useRef(0);
   if (apiMessages.length !== prevApiCountRef.current) {
     prevApiCountRef.current = apiMessages.length;
-    if (localMessages.length > 0) {
-      setLocalMessages([]);
-    }
+    if (localMessages.length > 0) setLocalMessages([]);
   }
-  const messages = [...apiMessages, ...localMessages];
+  const messages = [...localMessages, ...apiMessages];
 
-  // Socket: real-time events
+  const addOptimisticMessage = (data: Partial<ChatMessage>) => {
+    const newMsg: ChatMessage = {
+      id: String(Date.now()), sent: true, time: "Now",
+      createdAt: new Date().toISOString(), read: false, ...data,
+    };
+    if (replyingTo) newMsg.replyTo = { id: replyingTo.id, text: replyingTo.text, sender: replyingTo.sender };
+    setLocalMessages((prev) => [newMsg, ...prev]);
+  };
+
+  // ── Socket ─────────────────────────────────────────────────────────────────
   const { typingUser, isRecipientOnline } = useChatSocket(chatId);
   const isOnline = isRecipientOnline ?? isOnlineParam === "1";
-
-  // Typing debounce
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
-  const [contextMsg, setContextMsg] = useState<Message | null>(null);
-  const [deleteMsg, setDeleteMsg] = useState<Message | null>(null);
-  const [forwardMsg, setForwardMsg] = useState<Message | null>(null);
-  const [editingMsg, setEditingMsg] = useState<Message | null>(null);
-  const scrollViewRef = useRef<any>(null);
+  // ── UI state ───────────────────────────────────────────────────────────────
+  const [message, setMessage] = useState("");
+  const [showOptions, setShowOptions] = useState(false);
+  const [showCompatibility, setShowCompatibility] = useState(false);
+  const [isLiked, setIsLiked] = useState(isLikedParam === "1");
+  const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
+  const flatListRef = useRef<any>(null);
 
-  // Load compatibility dismissed state from storage
-  useEffect(() => {
-    AsyncStorage.getItem(compatKey).then((val) => {
-      if (val !== "1") setShowCompatibility(true);
-    });
-  }, [compatKey]);
+  // Message actions
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
+  const [contextMsg, setContextMsg] = useState<ChatMessage | null>(null);
+  const [deleteMsg, setDeleteMsg] = useState<ChatMessage | null>(null);
+  const [forwardMsg, setForwardMsg] = useState<ChatMessage | null>(null);
+  const [editingMsg, setEditingMsg] = useState<ChatMessage | null>(null);
 
-  // Show join group sheet on first visit for group chats
-  useEffect(() => {
-    if (!isGroup) return;
-    AsyncStorage.getItem(joinedKey).then((val) => {
-      if (val !== "1") {
-        // Small delay so the screen renders first
-        setTimeout(() => openSheet("joinGroup"), 500);
-      }
-    });
-  }, [isGroup, joinedKey]);
+  // ── Recording ──────────────────────────────────────────────────────────────
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordedUri, setRecordedUri] = useState<string | null>(null);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [isPlayingBack, setIsPlayingBack] = useState(false);
+  const [playbackSound, setPlaybackSound] = useState<Audio.Sound | null>(null);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const waveformAnim = useRef(Array.from({ length: 20 }, () => new Animated.Value(0.3))).current;
+  const recordDotAnim = useRef(new Animated.Value(1)).current;
 
-  const dismissCompatibility = useCallback(() => {
-    setShowCompatibility(false);
-    AsyncStorage.setItem(compatKey, "1");
-  }, [compatKey]);
+  // ── Upload ─────────────────────────────────────────────────────────────────
+  const { upload, isUploading } = useS3Upload();
 
-  // Questionnaire bottom sheet state
+  // ── Questionnaire sheet ────────────────────────────────────────────────────
   const [showQuestionnaire, setShowQuestionnaire] = useState(false);
-  const [questionnaireStep, setQuestionnaireStep] = useState<
-    "question" | "success"
-  >("question");
+  const [questionnaireStep, setQuestionnaireStep] = useState<"question" | "success">("question");
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
-  // Generic bottom sheet state (leave, block, report, joinGroup, planMeetup)
+  // ── Generic bottom sheets ──────────────────────────────────────────────────
   const [activeSheet, setActiveSheet] = useState<SheetType>(null);
   const [reportStep, setReportStep] = useState<"form" | "success">("form");
   const [reportText, setReportText] = useState("");
@@ -291,199 +207,211 @@ export default function ChatConversationScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const sheetAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
-  const closeSheetRef = useRef<() => void>(() => {});
+  const closeSheetRef = useRef<() => void>(() => { });
 
-  // Pan responder for draggable bottom sheet
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) =>
-        Math.abs(gestureState.dy) > 5,
-      onPanResponderMove: (_, gestureState) => {
-        // Only allow dragging down (positive dy)
-        if (gestureState.dy > 0) {
-          slideAnim.setValue(gestureState.dy);
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        // If dragged down more than 100px, close the sheet
-        if (gestureState.dy > 100 || gestureState.vy > 0.5) {
-          closeQuestionnaire();
-        } else {
-          // Snap back to open position
-          Animated.spring(slideAnim, {
-            toValue: 0,
-            useNativeDriver: true,
-            tension: 65,
-            friction: 11,
-          }).start();
-        }
-      },
-    })
-  ).current;
-
-  // Pan responder for the drag handle on input bar (drag UP to open)
-  const inputBarPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) =>
-        Math.abs(gestureState.dy) > 10,
-      onPanResponderRelease: (_, gestureState) => {
-        // If swiped up (negative dy), open the sheet
-        if (gestureState.dy < -30 || gestureState.vy < -0.3) {
-          openQuestionnaire();
-        }
-      },
-    })
-  ).current;
-
-  const openQuestionnaire = () => {
-    setQuestionnaireStep("question");
-    setSelectedOptions([]);
-    setShowQuestionnaire(true);
-    Animated.spring(slideAnim, {
-      toValue: 0,
-      useNativeDriver: true,
-      tension: 65,
-      friction: 11,
-    }).start();
-  };
-
-  const closeQuestionnaire = () => {
-    Animated.timing(slideAnim, {
-      toValue: SCREEN_HEIGHT,
-      duration: 250,
-      useNativeDriver: true,
-    }).start(() => {
-      setShowQuestionnaire(false);
-      setSelectedOptions([]);
+  // ── Effects ────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    AsyncStorage.getItem(compatKey).then((val) => {
+      if (val !== "1") setShowCompatibility(true);
     });
-  };
+  }, [compatKey]);
 
-  const toggleOption = (option: string) => {
-    setSelectedOptions((prev) =>
-      prev.includes(option) ? [] : [option]
-    );
-  };
+  useEffect(() => {
+    if (!isGroup) return;
+    AsyncStorage.getItem(joinedKey).then((val) => {
+      if (val !== "1") setTimeout(() => openSheet("joinGroup"), 500);
+    });
+  }, [isGroup, joinedKey]);
 
-  const handleSubmit = () => {
-    setQuestionnaireStep("success");
-  };
-
-  // ── Generic sheet open / close ──
+  // ── Sheet helpers ──────────────────────────────────────────────────────────
   const openSheet = useCallback((type: SheetType) => {
     setActiveSheet(type);
-    setReportStep("form");
-    setReportText("");
-    setMeetupStep("form");
-    setMeetupTitle("");
-    setMeetupLocation("");
-    setMeetupDate(null);
-    setMeetupTime(null);
-    setShowDatePicker(false);
-    setShowTimePicker(false);
-    Animated.spring(sheetAnim, {
-      toValue: 0,
-      useNativeDriver: true,
-      tension: 65,
-      friction: 11,
-    }).start();
+    setReportStep("form"); setReportText("");
+    setMeetupStep("form"); setMeetupTitle(""); setMeetupLocation("");
+    setMeetupDate(null); setMeetupTime(null);
+    setShowDatePicker(false); setShowTimePicker(false);
+    Animated.spring(sheetAnim, { toValue: 0, useNativeDriver: true, tension: 65, friction: 11 }).start();
   }, [sheetAnim]);
 
   const closeSheet = useCallback(() => {
-    Animated.timing(sheetAnim, {
-      toValue: SCREEN_HEIGHT,
-      duration: 250,
-      useNativeDriver: true,
-    }).start(() => {
-      setActiveSheet(null);
-      setReportStep("form");
-      setReportText("");
-      setMeetupStep("form");
-      setMeetupTitle("");
-      setMeetupLocation("");
-      setMeetupDate(null);
-      setMeetupTime(null);
-      setShowDatePicker(false);
-      setShowTimePicker(false);
-    });
+    Animated.timing(sheetAnim, { toValue: SCREEN_HEIGHT, duration: 250, useNativeDriver: true })
+      .start(() => {
+        setActiveSheet(null);
+        setReportStep("form"); setReportText("");
+        setMeetupStep("form"); setMeetupTitle(""); setMeetupLocation("");
+        setMeetupDate(null); setMeetupTime(null);
+        setShowDatePicker(false); setShowTimePicker(false);
+      });
   }, [sheetAnim]);
 
   closeSheetRef.current = closeSheet;
 
-  const sheetPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) =>
-        Math.abs(gestureState.dy) > 5,
-      onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dy > 0) {
-          sheetAnim.setValue(gestureState.dy);
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dy > 100 || gestureState.vy > 0.5) {
-          closeSheetRef.current();
-        } else {
-          Animated.spring(sheetAnim, {
-            toValue: 0,
-            useNativeDriver: true,
-            tension: 65,
-            friction: 11,
-          }).start();
-        }
-      },
-    })
-  ).current;
+  const sheetPanResponder = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 5,
+    onPanResponderMove: (_, g) => { if (g.dy > 0) sheetAnim.setValue(g.dy); },
+    onPanResponderRelease: (_, g) => {
+      if (g.dy > 100 || g.vy > 0.5) closeSheetRef.current();
+      else Animated.spring(sheetAnim, { toValue: 0, useNativeDriver: true, tension: 65, friction: 11 }).start();
+    },
+  })).current;
 
+  // ── Questionnaire helpers ──────────────────────────────────────────────────
+  const openQuestionnaire = () => {
+    setQuestionnaireStep("question"); setSelectedOptions([]); setShowQuestionnaire(true);
+    Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 65, friction: 11 }).start();
+  };
+
+  const closeQuestionnaire = () => {
+    Animated.timing(slideAnim, { toValue: SCREEN_HEIGHT, duration: 250, useNativeDriver: true })
+      .start(() => { setShowQuestionnaire(false); setSelectedOptions([]); });
+  };
+
+  const panResponder = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 5,
+    onPanResponderMove: (_, g) => { if (g.dy > 0) slideAnim.setValue(g.dy); },
+    onPanResponderRelease: (_, g) => {
+      if (g.dy > 100 || g.vy > 0.5) closeQuestionnaire();
+      else Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 65, friction: 11 }).start();
+    },
+  })).current;
+
+  const inputBarPanResponder = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 10,
+    onPanResponderRelease: (_, g) => { if (g.dy < -30 || g.vy < -0.3) openQuestionnaire(); },
+  })).current;
+
+  // ── Waveform animation ─────────────────────────────────────────────────────
+  const startWaveformAnimation = () => {
+    const animations = waveformAnim.map((val) =>
+      Animated.loop(Animated.sequence([
+        Animated.timing(val, { toValue: 0.2 + Math.random() * 0.8, duration: 200 + Math.random() * 300, useNativeDriver: true }),
+        Animated.timing(val, { toValue: 0.2 + Math.random() * 0.5, duration: 200 + Math.random() * 300, useNativeDriver: true }),
+      ]))
+    );
+    const dotBlink = Animated.loop(Animated.sequence([
+      Animated.timing(recordDotAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
+      Animated.timing(recordDotAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+    ]));
+    Animated.parallel([...animations, dotBlink]).start();
+  };
+
+  const stopWaveformAnimation = () => {
+    waveformAnim.forEach((val) => { val.stopAnimation(); val.setValue(0.3); });
+    recordDotAnim.stopAnimation(); recordDotAnim.setValue(1);
+  };
+
+  // ── Recording handlers ─────────────────────────────────────────────────────
+  const startRecording = async () => {
+    try {
+      setRecordedUri(null); setRecordingSeconds(0);
+      if (playbackSound) { await playbackSound.unloadAsync().catch(() => { }); setPlaybackSound(null); }
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== "granted") { console.error("Mic permission denied"); return; }
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      if (recording) { await recording.stopAndUnloadAsync().catch(() => { }); setRecording(null); }
+      const { recording: newRecording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      setRecording(newRecording); setIsRecording(true);
+      recordingTimerRef.current = setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
+      startWaveformAnimation();
+    } catch (err: any) {
+      console.error("Failed to start recording:", err?.message ?? err);
+    }
+  };
+
+  const stopRecording = async () => {
+    if (!recording) return;
+    if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null; }
+    stopWaveformAnimation(); setIsRecording(false);
+    try {
+      const status = await recording.getStatusAsync();
+      if (status.isRecording || status.canRecord) await recording.stopAndUnloadAsync();
+    } catch (err) { console.warn("Recording already stopped:", err); }
+    const uri = recording.getURI();
+    setRecording(null);
+    if (uri) setRecordedUri(uri);
+  };
+
+  const cancelRecording = async () => {
+    if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null; }
+    stopWaveformAnimation(); setIsRecording(false);
+    if (recording) { try { await recording.stopAndUnloadAsync(); } catch { } setRecording(null); }
+    setRecordingSeconds(0);
+  };
+
+  const cancelVoiceNote = async () => {
+    if (playbackSound) { await playbackSound.unloadAsync().catch(() => { }); setPlaybackSound(null); }
+    setRecordedUri(null); setRecordingSeconds(0); setIsPlayingBack(false);
+  };
+
+  const togglePlayback = async () => {
+    if (!recordedUri) return;
+    if (playbackSound) {
+      if (isPlayingBack) { await playbackSound.pauseAsync(); setIsPlayingBack(false); }
+      else { await playbackSound.playAsync(); setIsPlayingBack(true); }
+    } else {
+      const { sound } = await Audio.Sound.createAsync({ uri: recordedUri }, { shouldPlay: true }, (status) => {
+        if (status.isLoaded && status.didJustFinish) setIsPlayingBack(false);
+      });
+      setPlaybackSound(sound); setIsPlayingBack(true);
+    }
+  };
+
+  const sendVoiceNote = async () => {
+    if (!recordedUri) return;
+    if (playbackSound) { await playbackSound.unloadAsync().catch(() => { }); setPlaybackSound(null); }
+    setIsPlayingBack(false);
+    const uri = recordedUri; setRecordedUri(null); setRecordingSeconds(0);
+    const result = await upload(uri, `voice_note_${Date.now()}.m4a`, "audio/m4a");
+    if (result) {
+      emitSendMessage({ conversationId: chatId, type: MessageType.AUDIO, mediaUrl: result.fileUrl });
+      addOptimisticMessage({ type: MessageType.AUDIO, mediaUrl: result.fileUrl });
+    }
+  };
+
+  // ── Media upload helpers ───────────────────────────────────────────────────
+  const handleImagePick = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, quality: 0.8 });
+    if (!result.canceled && result.assets[0].uri) {
+      const { uri } = result.assets[0];
+      const fileName = `chat_image_${Date.now()}.jpg`;
+      const res = await upload(uri, fileName, "image/jpeg");
+      if (res) {
+        emitSendMessage({ conversationId: chatId, type: MessageType.IMAGE, mediaUrl: res.fileUrl });
+        addOptimisticMessage({ type: MessageType.IMAGE, mediaUrl: res.fileUrl });
+      }
+    }
+  };
+
+  const handleFilePick = async () => {
+    const result = await DocumentPicker.getDocumentAsync({ type: "application/pdf" });
+    if (!result.canceled && result.assets[0].uri) {
+      const { uri, name: fileName } = result.assets[0];
+      const res = await upload(uri, fileName, "application/pdf");
+      if (res) {
+        emitSendMessage({ conversationId: chatId, type: MessageType.FILE, mediaUrl: res.fileUrl });
+        addOptimisticMessage({ type: MessageType.FILE, mediaUrl: res.fileUrl });
+      }
+    }
+  };
+
+  // ── Chat actions ───────────────────────────────────────────────────────────
   const handleSend = () => {
     if (!message.trim()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    // Edit mode — emit via socket
     if (editingMsg) {
       emitEditMessage(editingMsg.id, message.trim());
-      setLocalMessages((prev) =>
-        prev.map((m) =>
-          m.id === editingMsg.id
-            ? { ...m, text: message.trim(), edited: true }
-            : m
-        )
-      );
-      setMessage("");
-      setEditingMsg(null);
-      return;
+      setLocalMessages((prev) => prev.map((m) => m.id === editingMsg.id ? { ...m, text: message.trim(), edited: true } : m));
+      setMessage(""); setEditingMsg(null); return;
     }
-
-    // Send message via socket
-    emitSendMessage({
-      conversationId: chatId,
-      content: message.trim(),
-      replyToId: replyingTo?.id,
-    });
-
-    // Optimistic local message
-    const newMsg: Message = {
-      id: String(Date.now()),
-      text: message.trim(),
-      sent: true,
-      time: "Now",
-      read: false,
-    };
-    if (replyingTo) {
-      newMsg.replyTo = {
-        id: replyingTo.id,
-        text: replyingTo.text,
-        sender: replyingTo.sender,
-      };
-    }
-    setLocalMessages((prev) => [...prev, newMsg]);
-    setMessage("");
-    setReplyingTo(null);
+    emitSendMessage({ conversationId: chatId, content: message.trim(), replyToId: replyingTo?.id, type: MessageType.TEXT });
+    addOptimisticMessage({ text: message.trim(), type: MessageType.TEXT });
+    setMessage(""); setReplyingTo(null);
     emitTyping(chatId, false);
   };
 
-  // Emit typing indicator on text input change
   const handleTextChange = (text: string) => {
     setMessage(text);
     if (text.trim().length > 0) {
@@ -495,1707 +423,185 @@ export default function ChatConversationScreen() {
     }
   };
 
-  const handleDeleteForMe = (msg: Message) => {
+  const handleDeleteForMe = (msg: ChatMessage) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     emitDeleteMessage(msg.id, "me");
     setLocalMessages((prev) => prev.filter((m) => m.id !== msg.id));
     setDeleteMsg(null);
   };
 
-  const handleDeleteForEveryone = (msg: Message) => {
+  const handleDeleteForEveryone = (msg: ChatMessage) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     emitDeleteMessage(msg.id, "everyone");
-    setLocalMessages((prev) =>
-      prev.map((m) =>
-        m.id === msg.id
-          ? { ...m, text: "This message was deleted", deleted: true, replyTo: undefined, edited: false }
-          : m
-      )
-    );
+    setLocalMessages((prev) => prev.map((m) => m.id === msg.id ? { ...m, text: "This message was deleted", deleted: true, replyTo: undefined, edited: false } : m));
     setDeleteMsg(null);
   };
 
+  const dismissCompatibility = useCallback(() => {
+    setShowCompatibility(false);
+    AsyncStorage.setItem(compatKey, "1");
+  }, [compatKey]);
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: "#FFFFFF" }}
-      edges={["top", "bottom"]}
-    >
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
-        <VStack flex={1}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }} edges={["top", "bottom"]}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+        <Box flex={1}>
           {/* Header */}
-          <HStack
-            px="$4"
-            py="$3"
-            alignItems="center"
-            justifyContent="space-between"
-            borderBottomWidth={1}
-            borderBottomColor="#F4F3F2"
-          >
-            <HStack alignItems="center" space="sm" flex={1}>
-              <Pressable
-                onPress={() => router.back()}
-                w={36}
-                h={36}
-                borderRadius={18}
-                bg="#F5F5F5"
-                justifyContent="center"
-                alignItems="center"
-              >
-                <MaterialIcons name="arrow-back" size={20} color="#1A1A1A" />
-              </Pressable>
+          <ChatHeader
+            name={name}
+            avatar={avatarParam}
+            isOnline={isOnline}
+            isGroup={isGroup}
+            isLiked={isLiked}
+            setIsLiked={setIsLiked}
+            recipientIdParam={recipientIdParam}
+            lastSeen={lastSeenParam}
+            showOptions={showOptions}
+            setShowOptions={setShowOptions}
+            openSheet={openSheet}
+          />
 
-              {/* Avatar */}
-              {avatarParam ? (
-                <Box w={36} h={36} borderRadius={18} overflow="hidden">
-                  <Image
-                    source={{ uri: avatarParam }}
-                    style={{ width: "100%", height: "100%" }}
-                    contentFit="cover"
-                  />
-                </Box>
-              ) : (
-                <Box
-                  w={36}
-                  h={36}
-                  borderRadius={18}
-                  bg="#F0C4C8"
-                  justifyContent="center"
-                  alignItems="center"
-                >
-                  <MaterialIcons name="person" size={20} color={PRIMARY_COLOR} />
-                </Box>
-              )}
-
-              <VStack flex={1}>
-                <Text
-                  fontSize={17}
-                  fontWeight="$bold"
-                  color="#1A1A1A"
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                >
-                  {name}
-                </Text>
-                {!isGroup && (
-                  <HStack alignItems="center" space="xs">
-                    <Box
-                      w={8}
-                      h={8}
-                      borderRadius={4}
-                      bg={isOnline ? "#4CAF50" : "#BDBDBD"}
-                    />
-                    <Text fontSize={12} color={isOnline ? "#4CAF50" : "#999999"}>
-                      {isOnline ? "Online" : "Offline"}
-                    </Text>
-                  </HStack>
-                )}
-              </VStack>
-            </HStack>
-
-            <HStack alignItems="center" space="md">
-              {!isGroup && recipientIdParam ? (
-                <Pressable
-                  disabled={interactionMutation.isPending}
-                  onPress={() => {
-                    const newLiked = !isLiked;
-                    Haptics.impactAsync(
-                      newLiked
-                        ? Haptics.ImpactFeedbackStyle.Medium
-                        : Haptics.ImpactFeedbackStyle.Light
-                    );
-                    Animated.sequence([
-                      Animated.spring(likeScale, {
-                        toValue: 1.4,
-                        useNativeDriver: true,
-                        speed: 50,
-                        bounciness: 12,
-                      }),
-                      Animated.spring(likeScale, {
-                        toValue: 1,
-                        useNativeDriver: true,
-                        speed: 30,
-                        bounciness: 8,
-                      }),
-                    ]).start();
-                    setIsLiked(newLiked);
-                    interactionMutation.mutate(
-                      {
-                        receiverId: recipientIdParam,
-                        type: newLiked ? "like" : "dislike",
-                      },
-                      {
-                        onError: () => setIsLiked(!newLiked),
-                      }
-                    );
-                  }}
-                >
-                  <Animated.View style={{ transform: [{ scale: likeScale }] }}>
-                    <HeartIcon size={28} isLiked={isLiked} />
-                  </Animated.View>
-                </Pressable>
-              ) : null}
-              <Pressable onPress={() => setShowOptions(!showOptions)}>
-                <MaterialIcons name="more-vert" size={24} color="#1A1A1A" />
-              </Pressable>
-            </HStack>
-          </HStack>
-
-          {/* Options Dropdown */}
-          {showOptions && (
-            <Box
-              position="absolute"
-              top={70}
-              right={16}
-              bg="#FFFFFF"
-              borderRadius={12}
-              py="$2"
-              px="$1"
-              zIndex={100}
-              shadowColor="#000000"
-              shadowOffset={{ width: 0, height: 2 }}
-              shadowOpacity={0.15}
-              shadowRadius={8}
-              elevation={5}
-              minWidth={200}
-            >
-              {(isGroup ? GROUP_OPTIONS_MENU : PRIVATE_OPTIONS_MENU).map((option) => (
-                <Pressable
-                  key={option.label}
-                  onPress={() => {
-                    setShowOptions(false);
-                    if (option.callType) {
-                      router.push({
-                        pathname: "/call-screen",
-                        params: { name, type: option.callType },
-                      });
-                    } else if (option.sheet) {
-                      openSheet(option.sheet);
-                    }
-                  }}
-                  px="$4"
-                  py="$3"
-                >
-                  <HStack alignItems="center" space="md">
-                    {option.icon}
-                    <Text
-                      fontSize={14}
-                      color="#1A1A1A"
-                      numberOfLines={1}
-                      ellipsizeMode="tail"
-                      flex={1}
-                    >
-                      {option.label}{option.appendName ? ` ${name}` : ""}
-                    </Text>
-                  </HStack>
-                </Pressable>
-              ))}
+          {/* Upload Status Overlay */}
+          {isUploading && (
+            <Box position="absolute" top={10} left={0} right={0} alignItems="center" zIndex={100} pointerEvents="none">
+              <Box bg="rgba(0,0,0,0.7)" px="$3" py="$1.5" borderRadius={20} flexDirection="row" alignItems="center">
+                <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+                <Text color="#FFFFFF" fontSize={12} fontWeight="$medium">Uploading...</Text>
+              </Box>
             </Box>
           )}
 
-          {showOptions && (
-            <Pressable
-              position="absolute"
-              top={0}
-              left={0}
-              right={0}
-              bottom={0}
-              zIndex={99}
-              onPress={() => setShowOptions(false)}
-            />
-          )}
-
-          {/* Date Separator */}
-          <Box alignItems="center" py="$3">
-            <Text fontSize={12} color="#999999">
-              Mar. 13, 2026
-            </Text>
-          </Box>
-
-          {/* Messages */}
-          <ScrollView
-            ref={scrollViewRef}
-            flex={1}
-            px="$4"
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 16 }}
-            keyboardShouldPersistTaps="handled"
-            onContentSizeChange={() =>
-              scrollViewRef.current?.scrollToEnd({ animated: true })
-            }
-            onScroll={({ nativeEvent }) => {
-              // Load older messages when scrolled near top
-              if (
-                nativeEvent.contentOffset.y < 50 &&
-                hasNextPage &&
-                !isFetchingNextPage
-              ) {
-                fetchNextPage();
-              }
-            }}
-            scrollEventThrottle={400}
-          >
-            {isFetchingNextPage && (
+          {/* Message List */}
+          <FlatList
+            ref={flatListRef}
+            data={getFlattenedMessages(messages)}
+            inverted={messages.length > 0}
+            keyExtractor={(item: any) => item.id}
+            onEndReached={() => hasNextPage && fetchNextPage()}
+            onEndReachedThreshold={0.5}
+            ListHeaderComponent={isFetchingNextPage ? (
               <Box py="$3" alignItems="center">
                 <Text fontSize={12} color="#999999">Loading older messages...</Text>
               </Box>
-            )}
-            {messages.map((msg) => (
-              <Pressable
-                key={msg.id}
-                onLongPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  setContextMsg(msg);
-                }}
-              >
-                <Box
-                  alignItems={msg.sent ? "flex-end" : "flex-start"}
-                  mb="$3"
-                >
-                  {/* Group sender name + avatar */}
-                  {isGroup && !msg.sent && msg.sender && (
-                    <HStack alignItems="center" space="xs" mb="$1" ml="$1">
-                      <Box
-                        w={20}
-                        h={20}
-                        borderRadius={10}
-                        bg="#D0C4D8"
-                        justifyContent="center"
-                        alignItems="center"
-                        overflow="hidden"
-                      >
-                        <MaterialIcons name="person" size={12} color="#FFFFFF" />
-                      </Box>
-                      <Text fontSize={12} color="#999999">
-                        -{msg.sender}
-                      </Text>
-                    </HStack>
-                  )}
-
-                  {/* Single bubble with optional reply inside */}
-                  <Box
-                    maxWidth="75%"
-                    bg={msg.deleted
-                      ? "transparent"
-                      : msg.sent ? PRIMARY_COLOR : "#E6E5EB"}
-                    borderRadius={18}
-                    borderBottomRightRadius={msg.sent ? 4 : 18}
-                    borderBottomLeftRadius={msg.sent ? 18 : 4}
-                    overflow="hidden"
-                    {...(msg.deleted && {
-                      borderWidth: 1,
-                      borderColor: "#D0D0D0",
-                    })}
-                  >
-                    {/* Deleted message */}
-                    {msg.deleted ? (
-                      <HStack px="$4" py="$3" alignItems="center" space="xs">
-                        <MaterialIcons name="block" size={14} color="#999999" />
-                        <Text
-                          fontSize={14}
-                          color="#999999"
-                          fontStyle="italic"
-                        >
-                          This message was deleted
-                        </Text>
-                      </HStack>
-                    ) : (
-                      <>
-                        {/* Quoted reply inside the bubble */}
-                        {msg.replyTo && (
-                          <Box
-                            bg={msg.sent ? "rgba(0,0,0,0.12)" : "rgba(0,0,0,0.06)"}
-                            mx="$2"
-                            mt="$2"
-                            borderRadius={10}
-                            px="$3"
-                            py="$2"
-                          >
-                            <Box
-                              borderLeftWidth={3}
-                              borderLeftColor={msg.sent ? "#FFFFFF" : PRIMARY_COLOR}
-                              pl="$2"
-                            >
-                              <Text
-                                fontSize={12}
-                                fontWeight="$bold"
-                                color={msg.sent ? "#FFFFFF" : PRIMARY_COLOR}
-                              >
-                                {msg.replyTo.sender || name}
-                              </Text>
-                              <Text
-                                fontSize={12}
-                                color={msg.sent ? "rgba(255,255,255,0.8)" : "#666666"}
-                                numberOfLines={2}
-                              >
-                                {msg.replyTo.text}
-                              </Text>
-                            </Box>
-                          </Box>
-                        )}
-
-                        {/* Message text */}
-                        <Box px="$4" py="$3">
-                          <Text
-                            fontSize={14}
-                            color={msg.sent ? "#FFFFFF" : "#1A1A1A"}
-                            lineHeight={20}
-                          >
-                            {msg.text}
-                          </Text>
-
-                          {/* Edited + read receipts row */}
-                          <HStack justifyContent={msg.edited ? "space-between" : "flex-end"} alignItems="center" mt="$0.5">
-                            {msg.edited && (
-                              <Text
-                                fontSize={11}
-                                fontStyle="italic"
-                                color={msg.sent ? "rgba(255,255,255,0.6)" : "#999999"}
-                              >
-                                edited
-                              </Text>
-                            )}
-                            {!isGroup && msg.sent && (
-                              <MaterialIcons
-                                name="done-all"
-                                size={14}
-                                color={msg.read ? "#53BDEB" : "rgba(255,255,255,0.5)"}
-                              />
-                            )}
-                          </HStack>
-                        </Box>
-                      </>
-                    )}
+            ) : null}
+            ListEmptyComponent={<EmptyChatState name={name} />}
+            renderItem={({ item }) => {
+              const msg = item as ChatListItem;
+              if ("isHeader" in msg) {
+                return (
+                  <Box alignItems="center" py="$4">
+                    <Box bg="#F0F0F0" px="$3" py="$1" borderRadius={12}>
+                      <Text fontSize={11} color="#666666" fontWeight="$medium">{msg.title}</Text>
+                    </Box>
                   </Box>
-                </Box>
-              </Pressable>
-            ))}
-          </ScrollView>
+                );
+              }
+              return (
+                <ChatMessageBubble
+                  msg={msg}
+                  isGroup={isGroup}
+                  conversationPartnerName={name}
+                  onLongPress={setContextMsg}
+                  onImagePress={setFullScreenImage}
+                />
+              );
+            }}
+            contentContainerStyle={{ flexGrow: 1, paddingVertical: 16 }}
+            style={{ flex: 1 }}
+          />
 
-          {/* Deeper Compatibility Questions Bar */}
-          {showCompatibility && (
-            <Box borderTopWidth={1} borderTopColor="#F4F3F2">
-              <HStack
-                px="$4"
-                py="$2"
-                alignItems="center"
-                justifyContent="space-between"
-              >
-                <Text fontSize={13} fontWeight="$semibold" color="#1A1A1A">
-                  Deeper Compatibility Questions
-                </Text>
-                <Pressable onPress={dismissCompatibility}>
-                  <MaterialIcons name="cancel" size={20} color="#999999" />
-                </Pressable>
-              </HStack>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{
-                  paddingHorizontal: 16,
-                  paddingBottom: 8,
-                  gap: 8,
-                }}
-              >
-                {COMPATIBILITY_QUESTIONS.map((question) => (
-                  <Pressable
-                    key={question}
-                    borderWidth={1}
-                    borderColor="#E0E0E0"
-                    borderRadius={20}
-                    px="$3"
-                    py="$2"
-                    onPress={() => setMessage(question)}
-                  >
-                    <Text fontSize={12} color="#1A1A1A">
-                      {question}
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </Box>
-          )}
-
-          {/* Editing bar */}
-          {editingMsg && (
-            <Box bg="#E8F5E9" borderTopWidth={1} borderTopColor="#C8E6C9" px="$4" py="$2">
-              <HStack alignItems="center" justifyContent="space-between">
-                <HStack flex={1} alignItems="center" space="sm">
-                  <MaterialIcons name="edit" size={16} color="#4CAF50" />
-                  <Box flex={1}>
-                    <Text fontSize={12} fontWeight="$bold" color="#4CAF50">
-                      Editing message
-                    </Text>
-                    <Text fontSize={13} color="#666666" numberOfLines={1}>
-                      {editingMsg.text}
-                    </Text>
-                  </Box>
-                </HStack>
-                <Pressable onPress={() => { setEditingMsg(null); setMessage(""); }} p="$1">
-                  <MaterialIcons name="close" size={18} color="#999999" />
-                </Pressable>
-              </HStack>
-            </Box>
-          )}
-
-          {/* Reply preview bar */}
-          {replyingTo && !editingMsg && (
-            <Box bg="#F5F5F5" borderTopWidth={1} borderTopColor="#F4F3F2" px="$4" py="$2">
-              <HStack alignItems="center" justifyContent="space-between">
-                <Box flex={1} borderLeftWidth={3} borderLeftColor={PRIMARY_COLOR} pl="$2">
-                  <Text fontSize={12} fontWeight="$bold" color={PRIMARY_COLOR}>
-                    {replyingTo.sender || (replyingTo.sent ? "You" : name)}
-                  </Text>
-                  <Text fontSize={13} color="#666666" numberOfLines={1}>
-                    {replyingTo.text}
-                  </Text>
-                </Box>
-                <Pressable onPress={() => setReplyingTo(null)} p="$1">
-                  <MaterialIcons name="close" size={18} color="#999999" />
-                </Pressable>
-              </HStack>
-            </Box>
-          )}
-
-          {/* Typing indicator */}
-          {typingUser && (
-            <Box px="$5" py="$1" bg="#FFFFFF">
-              <Text fontSize={12} color="#999999" fontStyle="italic">
-                {typingUser} is typing...
-              </Text>
-            </Box>
-          )}
-
-          {/* Message Input Bar */}
-          <Box bg="#FFFFFF" borderTopWidth={1} borderTopColor="#F4F3F2">
-              <HStack px="$4" py="$2" alignItems="center" space="sm">
-                <Pressable
-                  w={36}
-                  h={36}
-                  justifyContent="center"
-                  alignItems="center"
-                >
-                  <CameraIcon size={24} color="#1A1A1A" />
-                </Pressable>
-
-                <Box flex={1} bg="#F5F5F5" borderRadius={22} borderWidth={1} borderColor="#E0E0E0" minHeight={40} maxHeight={100} justifyContent="center">
-                  <HStack alignItems="flex-end">
-                    <TextInput
-                      placeholder="Message..."
-                      placeholderTextColor="#999999"
-                      style={{
-                        fontSize: 14,
-                        color: "#1A1A1A",
-                        flex: 1,
-                        paddingHorizontal: 16,
-                        paddingVertical: 8,
-                        maxHeight: 90,
-                      }}
-                      value={message}
-                      onChangeText={handleTextChange}
-                      multiline
-                      blurOnSubmit={false}
-                    />
-                    <Pressable pr="$3" pb="$2.5">
-                      <MicrophoneIcon size={18} color={PRIMARY_COLOR} />
-                    </Pressable>
-                  </HStack>
-                </Box>
-
-                <Pressable
-                  w={40}
-                  h={40}
-                  bg={PRIMARY_COLOR}
-                  borderRadius={20}
-                  justifyContent="center"
-                  alignItems="center"
-                  onPress={handleSend}
-                >
-                  <SendIcon size={18} color="#FFFFFF" />
-                </Pressable>
-              </HStack>
-
-              {/* Draggable Bottom Sheet Handle — swipe up to open questionnaire (private only) */}
-              {!isGroup && (
-                <Box
-                  {...inputBarPanResponder.panHandlers}
-                  alignItems="center"
-                  pb="$1"
-                  pt="$1"
-                >
-                  <Box w={120} h={4} borderRadius={3} bg="#1A1A1A" />
-                </Box>
-              )}
-          </Box>
-        </VStack>
+          {/* Input Bar (with banners + recording) */}
+          <ChatInputBar
+            message={message}
+            onChangeText={handleTextChange}
+            onSend={handleSend}
+            onImagePick={handleImagePick}
+            onFilePick={handleFilePick}
+            isUploading={isUploading}
+            isRecording={isRecording}
+            recordedUri={recordedUri}
+            recordingSeconds={recordingSeconds}
+            isPlayingBack={isPlayingBack}
+            waveformAnim={waveformAnim}
+            recordDotAnim={recordDotAnim}
+            onStartRecording={startRecording}
+            onStopRecording={stopRecording}
+            onCancelRecording={cancelRecording}
+            onCancelVoiceNote={cancelVoiceNote}
+            onTogglePlayback={togglePlayback}
+            onSendVoiceNote={sendVoiceNote}
+            editingMsg={editingMsg}
+            onCancelEdit={() => { setEditingMsg(null); setMessage(""); }}
+            replyingTo={replyingTo}
+            onCancelReply={() => setReplyingTo(null)}
+            typingUser={typingUser}
+            showCompatibility={showCompatibility}
+            onDismissCompatibility={dismissCompatibility}
+            isGroup={isGroup}
+            inputBarPanResponder={inputBarPanResponder}
+            conversationPartnerName={name}
+          />
+        </Box>
       </KeyboardAvoidingView>
 
-      {/* Message context action bar (WhatsApp-style top bar) */}
+      {/* Context Menu (long-press actions) */}
       {contextMsg && !contextMsg.deleted && (
-        <Box
-          position="absolute"
-          top={0}
-          left={0}
-          right={0}
-          bottom={0}
-          zIndex={200}
-        >
-          <TouchableWithoutFeedback onPress={() => setContextMsg(null)}>
-            <Box flex={1} bg="rgba(0,0,0,0.15)">
-              <Box bg="#FFFFFF" pt="$12" pb="$3" px="$4"
-                shadowColor="#000000"
-                shadowOffset={{ width: 0, height: 2 }}
-                shadowOpacity={0.1}
-                shadowRadius={4}
-                elevation={5}
-              >
-                <HStack justifyContent="space-around" alignItems="center">
-                  <Pressable
-                    alignItems="center"
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setReplyingTo(contextMsg);
-                      setContextMsg(null);
-                    }}
-                    px="$3"
-                    py="$1"
-                  >
-                    <MaterialIcons name="reply" size={22} color="#1A1A1A" />
-                    <Text fontSize={11} color="#1A1A1A" mt="$0.5">Reply</Text>
-                  </Pressable>
-                  <Pressable
-                    alignItems="center"
-                    onPress={async () => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      await Clipboard.setStringAsync(contextMsg.text);
-                      setContextMsg(null);
-                    }}
-                    px="$3"
-                    py="$1"
-                  >
-                    <MaterialIcons name="content-copy" size={22} color="#1A1A1A" />
-                    <Text fontSize={11} color="#1A1A1A" mt="$0.5">Copy</Text>
-                  </Pressable>
-                  {contextMsg.sent && (
-                    <Pressable
-                      alignItems="center"
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        setEditingMsg(contextMsg);
-                        setMessage(contextMsg.text);
-                        setContextMsg(null);
-                      }}
-                      px="$3"
-                      py="$1"
-                    >
-                      <MaterialIcons name="edit" size={22} color="#1A1A1A" />
-                      <Text fontSize={11} color="#1A1A1A" mt="$0.5">Edit</Text>
-                    </Pressable>
-                  )}
-                  <Pressable
-                    alignItems="center"
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setForwardMsg(contextMsg);
-                      setContextMsg(null);
-                    }}
-                    px="$3"
-                    py="$1"
-                  >
-                    <MaterialIcons name="shortcut" size={22} color="#1A1A1A" />
-                    <Text fontSize={11} color="#1A1A1A" mt="$0.5">Forward</Text>
-                  </Pressable>
-                  <Pressable
-                    alignItems="center"
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setDeleteMsg(contextMsg);
-                      setContextMsg(null);
-                    }}
-                    px="$3"
-                    py="$1"
-                  >
-                    <MaterialIcons name="delete-outline" size={22} color="#1A1A1A" />
-                    <Text fontSize={11} color="#1A1A1A" mt="$0.5">Delete</Text>
-                  </Pressable>
-                </HStack>
-              </Box>
-            </Box>
-          </TouchableWithoutFeedback>
-        </Box>
+        <ChatContextMenu
+          msg={contextMsg}
+          onClose={() => setContextMsg(null)}
+          onReply={() => { setReplyingTo(contextMsg); setContextMsg(null); }}
+          onCopy={async () => { await Clipboard.setStringAsync(contextMsg?.text || ""); setContextMsg(null); }}
+          onEdit={() => { setEditingMsg(contextMsg); setMessage(contextMsg?.text || ""); setContextMsg(null); }}
+          onForward={() => { setForwardMsg(contextMsg); setContextMsg(null); }}
+          onDelete={() => { setDeleteMsg(contextMsg); setContextMsg(null); }}
+        />
       )}
 
-      {/* Delete confirmation modal (WhatsApp-style) */}
-      <Modal
-        visible={!!deleteMsg}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setDeleteMsg(null)}
-      >
-        <TouchableWithoutFeedback onPress={() => setDeleteMsg(null)}>
-          <Box flex={1} bg="rgba(0,0,0,0.5)" justifyContent="center" alignItems="center">
-            <TouchableWithoutFeedback>
-              <Box bg="#FFFFFF" borderRadius={16} p="$5" mx="$6" w="85%" maxWidth={320}>
-                <Text fontSize={16} fontWeight="$bold" color="#1A1A1A" mb="$4">
-                  Delete message?
-                </Text>
-
-                {deleteMsg?.sent && (
-                  <Pressable
-                    borderWidth={1}
-                    borderColor={PRIMARY_COLOR}
-                    borderRadius={24}
-                    py="$2.5"
-                    alignItems="center"
-                    mb="$3"
-                    onPress={() => deleteMsg && handleDeleteForEveryone(deleteMsg)}
-                  >
-                    <Text fontSize={14} fontWeight="$semibold" color={PRIMARY_COLOR}>
-                      Delete for everyone
-                    </Text>
-                  </Pressable>
-                )}
-
-                <Pressable
-                  borderWidth={1}
-                  borderColor={PRIMARY_COLOR}
-                  borderRadius={24}
-                  py="$2.5"
-                  alignItems="center"
-                  mb="$3"
-                  onPress={() => deleteMsg && handleDeleteForMe(deleteMsg)}
-                >
-                  <Text fontSize={14} fontWeight="$semibold" color={PRIMARY_COLOR}>
-                    Delete for me
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  py="$2.5"
-                  alignItems="center"
-                  onPress={() => setDeleteMsg(null)}
-                >
-                  <Text fontSize={14} fontWeight="$semibold" color="#999999">
-                    Cancel
-                  </Text>
-                </Pressable>
-              </Box>
-            </TouchableWithoutFeedback>
-          </Box>
-        </TouchableWithoutFeedback>
-      </Modal>
-
-      {/* Forward message modal */}
-      <Modal
-        visible={!!forwardMsg}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setForwardMsg(null)}
-      >
-        <TouchableWithoutFeedback onPress={() => setForwardMsg(null)}>
-          <Box flex={1} bg="rgba(0,0,0,0.5)" justifyContent="flex-end">
-            <TouchableWithoutFeedback>
-              <Box
-                bg="#FFFFFF"
-                borderTopLeftRadius={24}
-                borderTopRightRadius={24}
-                pb="$6"
-                pt="$4"
-                px="$5"
-                maxHeight={SCREEN_HEIGHT * 0.5}
-              >
-                <Text fontSize={18} fontWeight="$bold" color="#1A1A1A" mb="$1">
-                  Forward to
-                </Text>
-                <Text fontSize={13} color="#999999" mb="$4">
-                  Select a chat to forward the message
-                </Text>
-
-                <ScrollView showsVerticalScrollIndicator={false}>
-                  {["Patrica", "Princess", "Football Lovers", "Juliet", "Foodies"].map(
-                    (contact) => (
-                      <Pressable
-                        key={contact}
-                        onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          setForwardMsg(null);
-                        }}
-                        py="$3"
-                        borderBottomWidth={1}
-                        borderBottomColor="#F4F3F2"
-                      >
-                        <HStack alignItems="center" space="md">
-                          <Box
-                            w={36}
-                            h={36}
-                            borderRadius={18}
-                            bg="#F0C4C8"
-                            justifyContent="center"
-                            alignItems="center"
-                          >
-                            <MaterialIcons name="person" size={20} color={PRIMARY_COLOR} />
-                          </Box>
-                          <Text fontSize={15} color="#1A1A1A" flex={1}>
-                            {contact}
-                          </Text>
-                          <MaterialIcons name="send" size={18} color={PRIMARY_COLOR} />
-                        </HStack>
-                      </Pressable>
-                    )
-                  )}
-                </ScrollView>
-              </Box>
-            </TouchableWithoutFeedback>
-          </Box>
-        </TouchableWithoutFeedback>
-      </Modal>
-
-      {/* Questionnaire Bottom Sheet Modal */}
-      <Modal
-        visible={showQuestionnaire}
-        transparent
-        animationType="none"
-        statusBarTranslucent
-      >
-        <TouchableWithoutFeedback onPress={closeQuestionnaire}>
-          <Box flex={1} bg="rgba(0,0,0,0.5)" justifyContent="flex-end">
-            <TouchableWithoutFeedback>
-              <Animated.View
-                style={{ transform: [{ translateY: slideAnim }] }}
-              >
-                <Box
-                  bg={PRIMARY_COLOR}
-                  borderTopLeftRadius={24}
-                  borderTopRightRadius={24}
-                  px="$6"
-                  pt="$0"
-                  pb="$8"
-                >
-                  {/* Draggable Handle Area */}
-                  <Box
-                    {...panResponder.panHandlers}
-                    alignItems="center"
-                    pt="$4"
-                    pb="$4"
-                  >
-                    <Box
-                      w={40}
-                      h={5}
-                      borderRadius={3}
-                      bg="rgba(255,255,255,0.5)"
-                    />
-                  </Box>
-
-                  {questionnaireStep === "question" ? (
-                    <>
-                      {/* Couple Images with Dual Starburst */}
-                      <Box alignItems="center" mb="$4">
-                        <DualStarburstFrame
-                          width={310}
-                          height={210}
-                          leftImageUri="https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=600&h=800&fit=crop&crop=top"
-                          rightImageUri="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=600&h=800&fit=crop&crop=top"
-                        />
-                      </Box>
-
-                      <Text
-                        fontSize={20}
-                        fontWeight="$bold"
-                        color="#FFFFFF"
-                        textAlign="center"
-                        mb="$1"
-                      >
-                        How is your connection going?
-                      </Text>
-                      <Text
-                        fontSize={14}
-                        color="rgba(255,255,255,0.8)"
-                        textAlign="center"
-                        mb="$5"
-                      >
-                        Select your preferred answer
-                      </Text>
-
-                      {/* Option Chips */}
-                      <HStack
-                        flexWrap="wrap"
-                        justifyContent="center"
-                        mb="$6"
-                        gap={10}
-                      >
-                        {CONNECTION_OPTIONS.map((option) => {
-                          const isSelected = selectedOptions.includes(option);
-                          return (
-                            <Pressable
-                              key={option}
-                              onPress={() => toggleOption(option)}
-                              borderWidth={1.5}
-                              borderColor="#FFFFFF"
-                              borderRadius={20}
-                              px="$4"
-                              py="$2"
-                              bg={isSelected ? "#FFFFFF" : "transparent"}
-                            >
-                              <Text
-                                fontSize={14}
-                                fontWeight="$medium"
-                                color={isSelected ? PRIMARY_COLOR : "#FFFFFF"}
-                              >
-                                {option}
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
-                      </HStack>
-
-                      {/* Submit Button */}
-                      <Pressable
-                        bg={
-                          selectedOptions.length > 0
-                            ? "#FFFFFF"
-                            : "rgba(255,255,255,0.4)"
-                        }
-                        borderRadius={28}
-                        py="$3"
-                        alignItems="center"
-                        mb="$3"
-                        onPress={
-                          selectedOptions.length > 0 ? handleSubmit : undefined
-                        }
-                      >
-                        <Text
-                          fontSize={16}
-                          fontWeight="$semibold"
-                          color={
-                            selectedOptions.length > 0
-                              ? PRIMARY_COLOR
-                              : "rgba(255,255,255,0.6)"
-                          }
-                        >
-                          Submit
-                        </Text>
-                      </Pressable>
-
-                      {/* Cancel Button */}
-                      <Pressable
-                        borderWidth={1.5}
-                        borderColor="#FFFFFF"
-                        borderRadius={28}
-                        py="$3"
-                        alignItems="center"
-                        onPress={closeQuestionnaire}
-                      >
-                        <Text
-                          fontSize={16}
-                          fontWeight="$semibold"
-                          color="#FFFFFF"
-                        >
-                          Cancel
-                        </Text>
-                      </Pressable>
-                    </>
-                  ) : (
-                    <>
-                      {/* Success State */}
-                      <Box alignItems="center" mb="$4">
-                        <DualStarburstFrame
-                          width={310}
-                          height={210}
-                          leftImageUri="https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=600&h=800&fit=crop&crop=top"
-                          rightImageUri="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=600&h=800&fit=crop&crop=top"
-                        />
-                      </Box>
-
-                      <Text
-                        fontSize={20}
-                        fontWeight="$bold"
-                        color="#FFFFFF"
-                        textAlign="center"
-                        mb="$6"
-                      >
-                        Keep up the conversation
-                      </Text>
-
-                      <Pressable
-                        bg="#FFFFFF"
-                        borderRadius={28}
-                        py="$3"
-                        alignItems="center"
-                        onPress={closeQuestionnaire}
-                      >
-                        <Text
-                          fontSize={16}
-                          fontWeight="$semibold"
-                          color="#1A1A1A"
-                        >
-                          Continue your Conversation
-                        </Text>
-                      </Pressable>
-                    </>
-                  )}
-                </Box>
-              </Animated.View>
-            </TouchableWithoutFeedback>
-          </Box>
-        </TouchableWithoutFeedback>
-      </Modal>
-
-      {/* ── Leave / Block / Report / Join Group Bottom Sheet ── */}
-      <Modal
-        visible={!!activeSheet}
-        transparent
-        animationType="none"
-        statusBarTranslucent
-      >
-        <TouchableWithoutFeedback onPress={closeSheet}>
-          <Box flex={1} bg="rgba(0,0,0,0.5)" justifyContent="flex-end">
-            <TouchableWithoutFeedback>
-              <Animated.View
-                style={{ transform: [{ translateY: sheetAnim }] }}
-              >
-                {/* ── Leave Group ── */}
-                {activeSheet === "leave" && (
-                  <Box
-                    bg={PRIMARY_COLOR}
-                    borderTopLeftRadius={24}
-                    borderTopRightRadius={24}
-                    px="$6"
-                    pb="$8"
-                  >
-                    <Box
-                      {...sheetPanResponder.panHandlers}
-                      alignItems="center"
-                      pt="$4"
-                      pb="$4"
-                    >
-                      <Box
-                        w={40}
-                        h={5}
-                        borderRadius={3}
-                        bg="rgba(255,255,255,0.5)"
-                      />
-                    </Box>
-
-                    <Text
-                      fontSize={20}
-                      fontWeight="$bold"
-                      color="#FFFFFF"
-                      textAlign="center"
-                      mb="$6"
-                      px="$2"
-                    >
-                      Are you sure you want to{"\n"}exit {name} group?
-                    </Text>
-
-                    <Pressable
-                      borderWidth={1.5}
-                      borderColor="#FFFFFF"
-                      borderRadius={28}
-                      py="$3"
-                      alignItems="center"
-                      mb="$3"
-                      onPress={closeSheet}
-                    >
-                      <Text
-                        fontSize={16}
-                        fontWeight="$semibold"
-                        color="#FFFFFF"
-                      >
-                        Yes
-                      </Text>
-                    </Pressable>
-
-                    <Pressable
-                      bg="#FFFFFF"
-                      borderRadius={28}
-                      py="$3"
-                      alignItems="center"
-                      onPress={closeSheet}
-                    >
-                      <Text
-                        fontSize={16}
-                        fontWeight="$bold"
-                        color="#1A1A1A"
-                      >
-                        No
-                      </Text>
-                    </Pressable>
-                  </Box>
-                )}
-
-                {/* ── Block ── */}
-                {activeSheet === "block" && (
-                  <Box
-                    bg={PRIMARY_COLOR}
-                    borderTopLeftRadius={24}
-                    borderTopRightRadius={24}
-                    px="$6"
-                    pb="$8"
-                  >
-                    <Box
-                      {...sheetPanResponder.panHandlers}
-                      alignItems="center"
-                      pt="$4"
-                      pb="$4"
-                    >
-                      <Box
-                        w={40}
-                        h={5}
-                        borderRadius={3}
-                        bg="rgba(255,255,255,0.5)"
-                      />
-                    </Box>
-
-                    <Text
-                      fontSize={20}
-                      fontWeight="$bold"
-                      color="#FFFFFF"
-                      textAlign="center"
-                      mb="$2"
-                      px="$2"
-                    >
-                      Are you sure you want to{"\n"}block {name}?
-                    </Text>
-
-                    <Text
-                      fontSize={14}
-                      color="rgba(255,255,255,0.8)"
-                      textAlign="center"
-                      mb="$6"
-                    >
-                      You will loose your love rate progress, if{"\n"}you proceed.
-                    </Text>
-
-                    <Pressable
-                      borderWidth={1.5}
-                      borderColor="#FFFFFF"
-                      borderRadius={28}
-                      py="$3"
-                      alignItems="center"
-                      mb="$3"
-                      onPress={closeSheet}
-                    >
-                      <Text
-                        fontSize={16}
-                        fontWeight="$semibold"
-                        color="#FFFFFF"
-                      >
-                        Yes
-                      </Text>
-                    </Pressable>
-
-                    <Pressable
-                      bg="#FFFFFF"
-                      borderRadius={28}
-                      py="$3"
-                      alignItems="center"
-                      onPress={closeSheet}
-                    >
-                      <Text
-                        fontSize={16}
-                        fontWeight="$bold"
-                        color="#1A1A1A"
-                      >
-                        No
-                      </Text>
-                    </Pressable>
-                  </Box>
-                )}
-
-                {/* ── Report ── */}
-                {activeSheet === "report" && reportStep === "form" && (
-                  <Box
-                    bg="#FFFFFF"
-                    borderTopLeftRadius={24}
-                    borderTopRightRadius={24}
-                    pb="$6"
-                  >
-                    {/* Drag handle */}
-                    <Box
-                      {...sheetPanResponder.panHandlers}
-                      alignItems="center"
-                      pt="$4"
-                      pb="$4"
-                    >
-                      <Box
-                        w={40}
-                        h={5}
-                        borderRadius={3}
-                        bg="#CCCCCC"
-                      />
-                    </Box>
-
-                    <Box px="$6" pt="$1">
-                      <Text
-                        fontSize={20}
-                        fontWeight="$bold"
-                        color="#1A1A1A"
-                        mb="$1"
-                      >
-                        Report {name}
-                      </Text>
-                      <Text fontSize={14} color="#999999" mb="$5">
-                        Type out your report
-                      </Text>
-
-                      <Box
-                        borderWidth={1}
-                        borderColor="#E0E0E0"
-                        borderRadius={12}
-                        p="$4"
-                        mb="$6"
-                        bg="#F5F3F0"
-                        minHeight={150}
-                      >
-                        <TextInput
-                          value={reportText}
-                          onChangeText={setReportText}
-                          multiline
-                          style={{
-                            fontSize: 15,
-                            color: "#1A1A1A",
-                            minHeight: 110,
-                            textAlignVertical: "top",
-                          }}
-                          placeholder="State your report"
-                          placeholderTextColor="#999999"
-                        />
-                      </Box>
-
-                      <Pressable
-                        bg={reportText.trim() ? PRIMARY_COLOR : "#F5F3F0"}
-                        borderRadius={28}
-                        py="$3"
-                        alignItems="center"
-                        mb="$3"
-                        onPress={reportText.trim() ? () => setReportStep("success") : undefined}
-                      >
-                        <Text
-                          fontSize={16}
-                          fontWeight="$bold"
-                          color={reportText.trim() ? "#FFFFFF" : "#CCCCCC"}
-                        >
-                          Submit Report
-                        </Text>
-                      </Pressable>
-
-                      <Pressable
-                        borderWidth={1.5}
-                        borderColor="#1A1A1A"
-                        borderRadius={28}
-                        py="$3"
-                        alignItems="center"
-                        onPress={closeSheet}
-                      >
-                        <Text
-                          fontSize={16}
-                          fontWeight="$bold"
-                          color="#1A1A1A"
-                        >
-                          Cancel
-                        </Text>
-                      </Pressable>
-                    </Box>
-                  </Box>
-                )}
-
-                {/* ── Report Success ── */}
-                {activeSheet === "report" && reportStep === "success" && (
-                  <Box
-                    bg={PRIMARY_COLOR}
-                    borderTopLeftRadius={24}
-                    borderTopRightRadius={24}
-                    px="$6"
-                    pb="$8"
-                  >
-                    <Box
-                      {...sheetPanResponder.panHandlers}
-                      alignItems="center"
-                      pt="$4"
-                      pb="$4"
-                    >
-                      <Box
-                        w={40}
-                        h={5}
-                        borderRadius={3}
-                        bg="rgba(255,255,255,0.5)"
-                      />
-                    </Box>
-
-                    <Box alignItems="center" mb="$4">
-                      <Image
-                        source={require("@/assets/images/two-hearts.png")}
-                        style={{ width: 180, height: 160 }}
-                        contentFit="contain"
-                      />
-                    </Box>
-
-                    <Text
-                      fontSize={22}
-                      fontWeight="$bold"
-                      color="#FFFFFF"
-                      textAlign="center"
-                      mb="$2"
-                    >
-                      Report Sent
-                    </Text>
-
-                    <Text
-                      fontSize={14}
-                      color="rgba(255,255,255,0.8)"
-                      textAlign="center"
-                      mb="$6"
-                    >
-                      Our support team will look into the situation
-                    </Text>
-
-                    <Pressable
-                      borderWidth={1.5}
-                      borderColor="#FFFFFF"
-                      borderRadius={28}
-                      py="$3"
-                      alignItems="center"
-                      onPress={closeSheet}
-                    >
-                      <Text
-                        fontSize={16}
-                        fontWeight="$semibold"
-                        color="#FFFFFF"
-                      >
-                        Cancel
-                      </Text>
-                    </Pressable>
-                  </Box>
-                )}
-
-                {/* ── Plan Meetup Form ── */}
-                {activeSheet === "planMeetup" && meetupStep === "form" && (
-                  <Box
-                    bg="#FFFFFF"
-                    borderTopLeftRadius={24}
-                    borderTopRightRadius={24}
-                    pb="$6"
-                  >
-                    <Box
-                      {...sheetPanResponder.panHandlers}
-                      alignItems="center"
-                      pt="$4"
-                      pb="$4"
-                    >
-                      <Box
-                        w={40}
-                        h={5}
-                        borderRadius={3}
-                        bg="#CCCCCC"
-                      />
-                    </Box>
-
-                    <Box px="$6" pt="$1">
-                      <Text
-                        fontSize={20}
-                        fontWeight="$bold"
-                        color="#1A1A1A"
-                        mb="$1"
-                      >
-                        Plan a Meeting
-                      </Text>
-                      <Text fontSize={14} color="#999999" mb="$5">
-                        Provide the details of meetup
-                      </Text>
-
-                      {/* Title */}
-                      <Box
-                        borderWidth={1}
-                        borderColor="#E0E0E0"
-                        borderRadius={12}
-                        p="$3"
-                        mb="$3"
-                        bg="#F5F3F0"
-                      >
-                        {meetupTitle ? (
-                          <Text fontSize={11} color="#999999" mb="$0.5">
-                            Title of meetup
-                          </Text>
-                        ) : null}
-                        <TextInput
-                          value={meetupTitle}
-                          onChangeText={setMeetupTitle}
-                          style={{ fontSize: 15, color: "#1A1A1A" }}
-                          placeholder="Title of meetup"
-                          placeholderTextColor="#999999"
-                        />
-                      </Box>
-
-                      {/* Location */}
-                      <Box
-                        borderWidth={1}
-                        borderColor="#E0E0E0"
-                        borderRadius={12}
-                        p="$3"
-                        mb="$3"
-                        bg="#F5F3F0"
-                      >
-                        {meetupLocation ? (
-                          <Text fontSize={11} color="#999999" mb="$0.5">
-                            Location
-                          </Text>
-                        ) : null}
-                        <TextInput
-                          value={meetupLocation}
-                          onChangeText={setMeetupLocation}
-                          style={{ fontSize: 15, color: "#1A1A1A" }}
-                          placeholder="Location"
-                          placeholderTextColor="#999999"
-                        />
-                      </Box>
-
-                      {/* Date & Time */}
-                      <HStack space="md" mb="$6">
-                        <Pressable
-                          flex={1}
-                          borderWidth={1}
-                          borderColor="#E0E0E0"
-                          borderRadius={12}
-                          p="$3"
-                          bg="#F5F3F0"
-                          onPress={() => setShowDatePicker(true)}
-                        >
-                          {meetupDate ? (
-                            <Text fontSize={11} color="#999999" mb="$0.5">
-                              Date
-                            </Text>
-                          ) : null}
-                          <Text
-                            fontSize={15}
-                            color={meetupDate ? "#1A1A1A" : "#999999"}
-                          >
-                            {meetupDate
-                              ? meetupDate.toLocaleDateString("en-GB", {
-                                  day: "numeric",
-                                  month: "short",
-                                  year: "numeric",
-                                })
-                              : "Date"}
-                          </Text>
-                        </Pressable>
-                        <Pressable
-                          flex={1}
-                          borderWidth={1}
-                          borderColor="#E0E0E0"
-                          borderRadius={12}
-                          p="$3"
-                          bg="#F5F3F0"
-                          onPress={() => setShowTimePicker(true)}
-                        >
-                          {meetupTime ? (
-                            <Text fontSize={11} color="#999999" mb="$0.5">
-                              Time
-                            </Text>
-                          ) : null}
-                          <Text
-                            fontSize={15}
-                            color={meetupTime ? "#1A1A1A" : "#999999"}
-                          >
-                            {meetupTime
-                              ? meetupTime.toLocaleTimeString("en-US", {
-                                  hour: "numeric",
-                                  minute: "2-digit",
-                                  hour12: true,
-                                })
-                              : "Time"}
-                          </Text>
-                        </Pressable>
-                      </HStack>
-
-                      {showDatePicker && (
-                        <DateTimePicker
-                          value={meetupDate || new Date()}
-                          mode="date"
-                          minimumDate={new Date()}
-                          accentColor={PRIMARY_COLOR}
-                          themeVariant="light"
-                          positiveButton={{ label: "OK", textColor: PRIMARY_COLOR }}
-                          negativeButton={{ label: "Cancel", textColor: PRIMARY_COLOR }}
-                          onChange={(
-                            _event: DateTimePickerEvent,
-                            selected?: Date
-                          ) => {
-                            setShowDatePicker(Platform.OS === "ios");
-                            if (selected) setMeetupDate(selected);
-                          }}
-                        />
-                      )}
-
-                      {showTimePicker && (
-                        <DateTimePicker
-                          value={meetupTime || new Date()}
-                          mode="time"
-                          accentColor={PRIMARY_COLOR}
-                          themeVariant="light"
-                          positiveButton={{ label: "OK", textColor: PRIMARY_COLOR }}
-                          negativeButton={{ label: "Cancel", textColor: PRIMARY_COLOR }}
-                          onChange={(
-                            _event: DateTimePickerEvent,
-                            selected?: Date
-                          ) => {
-                            setShowTimePicker(Platform.OS === "ios");
-                            if (selected) setMeetupTime(selected);
-                          }}
-                        />
-                      )}
-
-                      {/* Create Meetup */}
-                      <Pressable
-                        bg={
-                          meetupTitle.trim() && meetupLocation.trim() && meetupDate && meetupTime
-                            ? PRIMARY_COLOR
-                            : "#F5F3F0"
-                        }
-                        borderRadius={28}
-                        py="$3"
-                        alignItems="center"
-                        mb="$3"
-                        onPress={
-                          meetupTitle.trim() && meetupLocation.trim() && meetupDate && meetupTime
-                            ? () => setMeetupStep("success")
-                            : undefined
-                        }
-                      >
-                        <Text
-                          fontSize={16}
-                          fontWeight="$bold"
-                          color={
-                            meetupTitle.trim() && meetupLocation.trim() && meetupDate && meetupTime
-                              ? "#FFFFFF"
-                              : "#CCCCCC"
-                          }
-                        >
-                          Create Meetup
-                        </Text>
-                      </Pressable>
-
-                      {/* Cancel */}
-                      <Pressable
-                        borderWidth={1.5}
-                        borderColor="#1A1A1A"
-                        borderRadius={28}
-                        py="$3"
-                        alignItems="center"
-                        onPress={closeSheet}
-                      >
-                        <Text
-                          fontSize={16}
-                          fontWeight="$bold"
-                          color="#1A1A1A"
-                        >
-                          Cancel
-                        </Text>
-                      </Pressable>
-                    </Box>
-                  </Box>
-                )}
-
-                {/* ── Plan Meetup Success ── */}
-                {activeSheet === "planMeetup" && meetupStep === "success" && (
-                  <Box
-                    bg={PRIMARY_COLOR}
-                    borderTopLeftRadius={24}
-                    borderTopRightRadius={24}
-                    px="$6"
-                    pb="$8"
-                  >
-                    <Box
-                      {...sheetPanResponder.panHandlers}
-                      alignItems="center"
-                      pt="$4"
-                      pb="$4"
-                    >
-                      <Box
-                        w={40}
-                        h={5}
-                        borderRadius={3}
-                        bg="rgba(255,255,255,0.5)"
-                      />
-                    </Box>
-
-                    <Box alignItems="center" mb="$4">
-                      <Image
-                        source={require("@/assets/images/two-hearts.png")}
-                        style={{ width: 180, height: 160 }}
-                        contentFit="contain"
-                      />
-                    </Box>
-
-                    <Text
-                      fontSize={22}
-                      fontWeight="$bold"
-                      color="#FFFFFF"
-                      textAlign="center"
-                      mb="$2"
-                    >
-                      Meetup Created Successfully
-                    </Text>
-
-                    <Text
-                      fontSize={14}
-                      color="rgba(255,255,255,0.8)"
-                      textAlign="center"
-                      mb="$6"
-                      px="$2"
-                    >
-                      Lovebuilt as set up a reminder for you and{"\n"}{name}, wear your best outfit for the day.
-                    </Text>
-
-                    <Pressable
-                      borderWidth={1.5}
-                      borderColor="#FFFFFF"
-                      borderRadius={28}
-                      py="$3"
-                      alignItems="center"
-                      onPress={closeSheet}
-                    >
-                      <Text
-                        fontSize={16}
-                        fontWeight="$semibold"
-                        color="#FFFFFF"
-                      >
-                        Cancel
-                      </Text>
-                    </Pressable>
-                  </Box>
-                )}
-
-                {/* ── Join Group ── */}
-                {activeSheet === "joinGroup" && (
-                  <Box
-                    bg={PRIMARY_COLOR}
-                    borderTopLeftRadius={24}
-                    borderTopRightRadius={24}
-                    px="$6"
-                    pb="$8"
-                  >
-                    <Box
-                      {...sheetPanResponder.panHandlers}
-                      alignItems="center"
-                      pt="$4"
-                      pb="$2"
-                    >
-                      <Box
-                        w={40}
-                        h={5}
-                        borderRadius={3}
-                        bg="rgba(255,255,255,0.5)"
-                      />
-                    </Box>
-
-                    <Box alignItems="center" mb="$4">
-                      <CurvyStarburstFrame
-                        size={180}
-                        imageUri="https://images.unsplash.com/photo-1462275646964-a0e3c11f18a6?w=400&h=400&fit=crop"
-                      />
-                    </Box>
-
-                    <Text
-                      fontSize={22}
-                      fontWeight="$bold"
-                      color="#FFFFFF"
-                      textAlign="center"
-                      mb="$1"
-                    >
-                      {name}
-                    </Text>
-
-                    <Text
-                      fontSize={14}
-                      color="rgba(255,255,255,0.8)"
-                      textAlign="center"
-                      mb="$4"
-                    >
-                      A group where nature is discussed{"\n"}and love is found.
-                    </Text>
-
-                    {/* Member avatars row */}
-                    <HStack
-                      justifyContent="center"
-                      alignItems="center"
-                      space="sm"
-                      mb="$6"
-                    >
-                      <HStack>
-                        {[0, 1].map((i) => (
-                          <Box
-                            key={i}
-                            w={28}
-                            h={28}
-                            borderRadius={14}
-                            bg="#F0C4C8"
-                            borderWidth={2}
-                            borderColor={PRIMARY_COLOR}
-                            justifyContent="center"
-                            alignItems="center"
-                            marginRight={-8}
-                            overflow="hidden"
-                          >
-                            <MaterialIcons
-                              name="person"
-                              size={16}
-                              color="#FFFFFF"
-                            />
-                          </Box>
-                        ))}
-                      </HStack>
-                      <Text fontSize={13} color="#FFFFFF" ml="$2">
-                        +50
-                      </Text>
-                      <Box
-                        w={24}
-                        h={24}
-                        borderRadius={12}
-                        bg="#F0C4C8"
-                        justifyContent="center"
-                        alignItems="center"
-                        overflow="hidden"
-                        ml="$1"
-                      >
-                        <MaterialIcons
-                          name="person"
-                          size={14}
-                          color="#FFFFFF"
-                        />
-                      </Box>
-                      <Text fontSize={13} color="#FFFFFF">
-                        Patrica is here
-                      </Text>
-                    </HStack>
-
-                    <Pressable
-                      bg="#FFFFFF"
-                      borderRadius={28}
-                      py="$3"
-                      alignItems="center"
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                        AsyncStorage.setItem(joinedKey, "1");
-                        closeSheet();
-                      }}
-                    >
-                      <Text
-                        fontSize={16}
-                        fontWeight="$bold"
-                        color="#1A1A1A"
-                      >
-                        Join {name}
-                      </Text>
-                    </Pressable>
-                  </Box>
-                )}
-              </Animated.View>
-            </TouchableWithoutFeedback>
-          </Box>
-        </TouchableWithoutFeedback>
-      </Modal>
+      {/* All modals (delete, forward, questionnaire, sheets) */}
+      <ChatModals
+        name={name}
+        isGroup={isGroup}
+        fullScreenImage={fullScreenImage}
+        onCloseFullScreenImage={() => setFullScreenImage(null)}
+        deleteMsg={deleteMsg}
+        onCloseDeleteMsg={() => setDeleteMsg(null)}
+        onDeleteForMe={handleDeleteForMe}
+        onDeleteForEveryone={handleDeleteForEveryone}
+        forwardMsg={forwardMsg}
+        onCloseForwardMsg={() => setForwardMsg(null)}
+        showQuestionnaire={showQuestionnaire}
+        questionnaireStep={questionnaireStep}
+        setQuestionnaireStep={setQuestionnaireStep}
+        selectedOptions={selectedOptions}
+        toggleOption={(opt) => setSelectedOptions((prev) => prev.includes(opt) ? [] : [opt])}
+        onSubmitQuestionnaire={() => setQuestionnaireStep("success")}
+        onCloseQuestionnaire={closeQuestionnaire}
+        slideAnim={slideAnim}
+        panResponder={panResponder}
+        activeSheet={activeSheet}
+        onCloseSheet={closeSheet}
+        reportStep={reportStep}
+        setReportStep={setReportStep}
+        reportText={reportText}
+        setReportText={setReportText}
+        meetupStep={meetupStep}
+        setMeetupStep={setMeetupStep}
+        meetupTitle={meetupTitle}
+        setMeetupTitle={setMeetupTitle}
+        meetupLocation={meetupLocation}
+        setMeetupLocation={setMeetupLocation}
+        meetupDate={meetupDate}
+        setMeetupDate={setMeetupDate}
+        meetupTime={meetupTime}
+        setMeetupTime={setMeetupTime}
+        showDatePicker={showDatePicker}
+        setShowDatePicker={setShowDatePicker}
+        showTimePicker={showTimePicker}
+        setShowTimePicker={setShowTimePicker}
+        sheetAnim={sheetAnim}
+        sheetPanResponder={sheetPanResponder}
+      />
     </SafeAreaView>
   );
 }

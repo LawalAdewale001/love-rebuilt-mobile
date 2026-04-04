@@ -4,6 +4,7 @@ import { LogBox } from "react-native";
 LogBox.ignoreLogs([
   "SafeAreaView has been deprecated",
   "react-native-safe-area-context",
+  "Expo AV has been deprecated",
 ]);
 
 import { config } from "@gluestack-ui/config";

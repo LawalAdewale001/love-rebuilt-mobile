@@ -22,6 +22,7 @@ import {
 } from "@gluestack-ui/themed";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -40,6 +41,8 @@ import {
   useChatListQuery,
   useChatSearchQuery,
 } from "@/lib/queries";
+import { MessageType } from "@/types/chat.types";
+import { useAllChatsSocket } from "@/hooks/use-all-chats-socket";
 
 type ChatOption = {
   icon: React.ReactNode;
@@ -55,6 +58,8 @@ function getDirectChatDisplay(chat: ChatConversation, currentUserId: string) {
     avatar: other?.avatar ?? null,
     userId: other?.userId ?? "",
     isOnline: other?.isOnline ?? false,
+    isLiked: other?.isLiked ?? false,
+    lastSeen: other?.lastSeen ?? null,
   };
 }
 
@@ -103,10 +108,19 @@ export default function ChatsScreen() {
     refetch,
     isRefetching,
   } = useChatListQuery();
+  
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
 
   // Search
   const { data: searchData, isLoading: isSearchLoading } =
     useChatSearchQuery(debouncedSearch);
+
+  // Typing status across all chats
+  const { typingMap } = useAllChatsSocket();
 
   const allChats =
     chatListData?.pages.flatMap((page) => page.result ?? page) ?? [];
@@ -169,7 +183,7 @@ export default function ChatsScreen() {
     ({ item: chat }: { item: ChatConversation }) => {
       const isGroup = chat.type === "group";
       const display = isGroup
-        ? { name: chat.name, avatar: chat.image }
+        ? { name: chat.name, avatar: chat.image, userId: "", isOnline: false, isLiked: false }
         : getDirectChatDisplay(chat, currentUserId);
 
       const lastMessageText = chat.lastMessage?.content ?? null;
@@ -189,6 +203,8 @@ export default function ChatsScreen() {
                 avatar: display.avatar ?? "",
                 recipientId: isGroup ? "" : display.userId,
                 isOnline: !isGroup && display.isOnline ? "1" : "0",
+                isLiked: !isGroup && display.isLiked ? "1" : "0",
+                lastSeen: !isGroup && display.lastSeen ? display.lastSeen : "",
               },
             })
           }
@@ -313,9 +329,37 @@ export default function ChatsScreen() {
                   />
                 </HStack>
               </HStack>
-              {lastMessageText ? (
-                <Text fontSize={13} color="#999999" numberOfLines={1}>
-                  {lastMessageText}
+              {typingMap[chat.id] ? (
+                <Text fontSize={13} color={PRIMARY_COLOR} fontStyle="italic">
+                  Is typing...
+                </Text>
+              ) : chat.lastMessage ? (
+                <HStack alignItems="center" space="xs">
+                  {chat.lastMessage.type === MessageType.IMAGE && (
+                    <MaterialIcons name="camera-alt" size={14} color="#999999" />
+                  )}
+                  {chat.lastMessage.type === MessageType.AUDIO && (
+                    <MaterialIcons name="mic" size={14} color="#999999" />
+                  )}
+                  {chat.lastMessage.type === MessageType.FILE && (
+                    <MaterialIcons name="insert-drive-file" size={14} color="#999999" />
+                  )}
+                  {chat.lastMessage.type === MessageType.VIDEO && (
+                    <MaterialIcons name="videocam" size={14} color="#999999" />
+                  )}
+                  <Text fontSize={13} color="#999999" numberOfLines={1} flex={1}>
+                    {chat.lastMessage.type === MessageType.TEXT
+                      ? chat.lastMessage.content
+                      : chat.lastMessage.type === MessageType.AUDIO
+                        ? "Voice note"
+                        : chat.lastMessage.type === MessageType.FILE
+                          ? "Document"
+                          : chat.lastMessage.type.charAt(0).toUpperCase() + chat.lastMessage.type.slice(1)}
+                  </Text>
+                </HStack>
+              ) : typingMap[chat.id] ? (
+                <Text fontSize={13} color={PRIMARY_COLOR} fontStyle="italic">
+                  Typing...
                 </Text>
               ) : (
                 <Text fontSize={13} color="#CCCCCC" numberOfLines={1}>

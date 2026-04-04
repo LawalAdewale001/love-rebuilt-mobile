@@ -56,11 +56,14 @@ export function disconnectSocket() {
 
 // ─── Emit helpers
 
+import type { MessageType } from "@/types/chat.types";
+
 export function emitSendMessage(data: {
   conversationId: string;
-  content: string;
+  content?: string;
   replyToId?: string;
   mediaUrl?: string;
+  type?: MessageType;
 }) {
   socket?.emit("sendMessage", data);
 }

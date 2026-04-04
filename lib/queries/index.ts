@@ -86,6 +86,7 @@ export type ChatMember = {
   joinedAt: string;
   lastReadAt: string;
   isBlocked: boolean;
+  isLiked: boolean;
 };
 
 export type ChatConversation = {
@@ -231,6 +232,8 @@ export function useMessagesQuery(conversationId: string) {
         ? lastPage.pagination.page + 1
         : undefined,
     enabled: !!conversationId,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 }
 
