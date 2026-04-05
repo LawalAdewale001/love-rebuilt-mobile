@@ -4,6 +4,7 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Box, HStack, Pressable, Text, VStack } from "@gluestack-ui/themed";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
+import { MeetupBubbleIcon } from "@/components/ui/chat-icons";
 import { Linking, TouchableWithoutFeedback } from "react-native";
 import { VoiceNotePlayer } from "./VoiceNotePlayer";
 
@@ -112,14 +113,33 @@ export function ChatMessageBubble({
               )}
 
               {/* Meetup */}
-              {msg.type === MessageType.MEETUP && (
-                <VStack px="$4" py="$3" space="xs">
-                  <HStack alignItems="center" space="xs" mb="$1">
-                    <MaterialIcons name="event" size={18} color={msg.sent ? "#FFFFFF" : PRIMARY_COLOR} />
-                    <Text fontSize={14} fontWeight="$bold" color={msg.sent ? "#FFFFFF" : PRIMARY_COLOR}>Meetup Invitation</Text>
+              {msg.type === MessageType.MEETUP && msg.meetup && (
+                <Box bg="#E86A7A" borderRadius={18} overflow="hidden" flexDirection="row">
+                  <Box w={6} bg="#B73041" opacity={0.6} />
+                  <HStack px="$4" py="$4" space="md" alignItems="center" flex={1}>
+                    <Box bg="rgba(255,255,255,0.15)" p="$1.5" borderRadius={10} alignItems="center" justifyContent="center">
+                      <MeetupBubbleIcon size={34} color="white" />
+                    </Box>
+                    <VStack flex={1}>
+                      <Text fontSize={16} fontWeight="$bold" color="#FFFFFF" numberOfLines={1}>
+                        {msg.meetup.title}
+                      </Text>
+                      <Text fontSize={13} color="#FFFFFF" mt="$1" opacity={0.9}>
+                        {(() => {
+                          const date = new Date(msg.meetup.date);
+                          const day = date.getDate();
+                          const month = date.toLocaleDateString("en-GB", { month: "short" });
+                          const year = date.getFullYear();
+                          const suffix = ["th", "st", "nd", "rd"][(day % 10 > 3 || Math.floor((day % 100) / 10) === 1) ? 0 : day % 10];
+                          return `${day}${suffix} ${month}. ${year}`;
+                        })()} • {msg.meetup.time.toLowerCase()}
+                      </Text>
+                      <Text fontSize={13} color="#FFFFFF" mt="$1" opacity={0.8} numberOfLines={1}>
+                        {msg.meetup.location}
+                      </Text>
+                    </VStack>
                   </HStack>
-                  <Text fontSize={13} color={msg.sent ? "rgba(255,255,255,0.8)" : "#666666"}>A meetup invitation has been sent.</Text>
-                </VStack>
+                </Box>
               )}
 
               {/* Text */}

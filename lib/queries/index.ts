@@ -332,3 +332,23 @@ export function useLeaveGroupMutation() {
     },
   });
 }
+
+export type CreateMeetupRequest = {
+  conversationId: string;
+  title: string;
+  location: string;
+  date: string; // YYYY-MM-DD
+  time: string; // HH:mm
+};
+
+export function useCreateMeetupMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateMeetupRequest) =>
+      apiClient.post('/api/chat/meetups', data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.messages(variables.conversationId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
+    },
+  });
+}

@@ -33,7 +33,7 @@ import { ChatModals } from "@/components/chat/ChatModals";
 import { useChatSocket } from "@/hooks/use-chat-socket";
 import { useS3Upload } from "@/hooks/use-s3-upload";
 import { getAuthUser } from "@/lib/auth-store";
-import { queryKeys, useMessagesQuery, type ChatMessage as ApiChatMessage, type ChatConversation, type ChatMember, useBlockMutation, useReportMutation, useConversationQuery, useUnblockMutation, useChatListQuery, useJoinGroupMutation, useLeaveGroupMutation } from "@/lib/queries";
+import { queryKeys, useMessagesQuery, type ChatMessage as ApiChatMessage, type ChatConversation, type ChatMember, useBlockMutation, useReportMutation, useConversationQuery, useUnblockMutation, useChatListQuery, useJoinGroupMutation, useLeaveGroupMutation, useCreateMeetupMutation } from "@/lib/queries";
 import { emitDeleteMessage, emitEditMessage, emitSendMessage, emitTyping } from "@/lib/socket";
 
 import { MessageType, type ChatListItem, type ChatMessage, type SheetType } from "@/types/chat.types";
@@ -173,6 +173,12 @@ export default function ChatConversationScreen() {
         type: mappedType,
         mediaUrl: m.mediaUrl || undefined,
         edited: m.updatedAt !== m.createdAt,
+        meetup: m.meetup ? {
+          title: m.meetup.title,
+          location: m.meetup.location,
+          date: m.meetup.date,
+          time: m.meetup.time,
+        } : undefined,
       };
     });
   }, [messagesData, currentUserId, isGroup]);
@@ -471,6 +477,7 @@ export default function ChatConversationScreen() {
   const reportMutation = useReportMutation();
   const joinGroupMutation = useJoinGroupMutation();
   const leaveGroupMutation = useLeaveGroupMutation();
+  const meetupMutation = useCreateMeetupMutation();
 
   const handleJoinGroup = async () => {
     try {
@@ -479,6 +486,32 @@ export default function ChatConversationScreen() {
       closeSheet();
     } catch (err) {
       console.error("Failed to join group:", err);
+    }
+  };
+
+  const handleCreateMeetup = async (data: { title: string; location: string; date: Date; time: Date }) => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      
+      const formattedDate = data.date.toISOString().split("T")[0]; // YYYY-MM-DD
+      const formattedTime = data.time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }); // HH:mm
+      
+      await meetupMutation.mutateAsync({
+        conversationId: chatId,
+        title: data.title,
+        location: data.location,
+        date: formattedDate,
+        time: formattedTime,
+      });
+      
+      // Success is indicated by showing a success state or just closing the modal
+      setMeetupStep("success");
+      // Optionally stay on success screen for a bit then close
+      setTimeout(() => {
+        closeSheet();
+      }, 1500);
+    } catch (err) {
+      console.error("Failed to create meetup:", err);
     }
   };
 
@@ -833,6 +866,8 @@ export default function ChatConversationScreen() {
         isMember={isMember}
         onJoinGroup={handleJoinGroup}
         isJoiningGroup={joinGroupMutation.isPending}
+        onCreateMeetup={handleCreateMeetup}
+        isCreatingMeetup={meetupMutation.isPending}
       />
     </SafeAreaView>
   );

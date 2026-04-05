@@ -99,6 +99,8 @@ interface ChatModalsProps {
   isDeleting?: boolean;
   onLeaveGroup?: () => void;
   isLeavingGroup?: boolean;
+  onCreateMeetup?: (data: { title: string; location: string; date: Date; time: Date }) => void;
+  isCreatingMeetup?: boolean;
 }
 
 // ─── Drag handle sub-component ───────────────────────────────────────────────
@@ -169,8 +171,10 @@ export function ChatModals({
   isJoiningGroup,
   onLeaveGroup,
   isLeavingGroup,
+  onCreateMeetup,
+  isCreatingMeetup,
 }: ChatModalsProps) {
-  const isAnyActionInProgress = isBlocking || isUnblocking || isReporting || isDeleting || isJoiningGroup || isLeavingGroup;
+  const isAnyActionInProgress = isBlocking || isUnblocking || isReporting || isDeleting || isJoiningGroup || isLeavingGroup || isCreatingMeetup;
   return (
     <>
       {/* ── Full-screen image viewer ── */}
@@ -516,22 +520,49 @@ export function ChatModals({
                       {showDatePicker && (
                         <DateTimePicker value={meetupDate || new Date()} mode="date" display={Platform.OS === "ios" ? "spinner" : "default"}
                           onChange={(_: DateTimePickerEvent, date?: Date) => { setShowDatePicker(false); if (date) setMeetupDate(date); }}
+                          minimumDate={new Date()}
                         />
                       )}
                       {showTimePicker && (
                         <DateTimePicker value={meetupTime || new Date()} mode="time" display={Platform.OS === "ios" ? "spinner" : "default"}
-                          onChange={(_: DateTimePickerEvent, time?: Date) => { setShowTimePicker(false); if (time) setMeetupTime(time); }}
+                          onChange={(_: DateTimePickerEvent, time?: Date) => { 
+                            setShowTimePicker(false); 
+                            if (time) {
+                              const now = new Date();
+                              const isToday = meetupDate && meetupDate.toDateString() === now.toDateString();
+                              if (isToday && time.getTime() < now.getTime()) {
+                                setMeetupTime(now); // Force to now if in past
+                              } else {
+                                setMeetupTime(time);
+                              }
+                            } 
+                          }}
+                          minimumDate={meetupDate && meetupDate.toDateString() === new Date().toDateString() ? new Date() : undefined}
                         />
                       )}
 
                       <Pressable
-                        bg={meetupTitle && meetupLocation && meetupDate && meetupTime ? PRIMARY_COLOR : "#F5F3F0"}
+                        bg={meetupTitle && meetupLocation && meetupDate && meetupTime && 
+                          (new Date(meetupDate.getFullYear(), meetupDate.getMonth(), meetupDate.getDate(), meetupTime.getHours(), meetupTime.getMinutes()) >= new Date()) 
+                          && !isAnyActionInProgress ? PRIMARY_COLOR : "#F5F3F0"}
                         borderRadius={28} py="$3" alignItems="center" mb="$3"
-                        onPress={meetupTitle && meetupLocation && meetupDate && meetupTime ? onCloseSheet : undefined}
+                        disabled={!meetupTitle || !meetupLocation || !meetupDate || !meetupTime || 
+                          (new Date(meetupDate.getFullYear(), meetupDate.getMonth(), meetupDate.getDate(), meetupTime.getHours(), meetupTime.getMinutes()) < new Date()) 
+                          || isAnyActionInProgress}
+                        onPress={() => {
+                          if (meetupTitle && meetupLocation && meetupDate && meetupTime && onCreateMeetup) {
+                            onCreateMeetup({ title: meetupTitle, location: meetupLocation, date: meetupDate, time: meetupTime });
+                          }
+                        }}
                       >
-                        <Text fontSize={16} fontWeight="$bold"
-                          color={meetupTitle && meetupLocation && meetupDate && meetupTime ? "#FFFFFF" : "#CCCCCC"}
-                        >Send Meetup</Text>
+                        {isCreatingMeetup ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <Text fontSize={16} fontWeight="$bold"
+                            color={meetupTitle && meetupLocation && meetupDate && meetupTime && 
+                              (new Date(meetupDate.getFullYear(), meetupDate.getMonth(), meetupDate.getDate(), meetupTime.getHours(), meetupTime.getMinutes()) >= new Date()) ? "#FFFFFF" : "#CCCCCC"}
+                          >Send Meetup</Text>
+                        )}
                       </Pressable>
                       <Pressable borderWidth={1.5} borderColor="#1A1A1A" borderRadius={28} py="$3"
                         alignItems="center" onPress={onCloseSheet}

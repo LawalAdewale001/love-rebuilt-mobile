@@ -23,6 +23,12 @@ export type ChatMessage = {
   type?: MessageType;
   mediaUrl?: string;
   transcription?: string;
+  meetup?: {
+    title: string;
+    location: string;
+    date: string;
+    time: string;
+  };
 };
 
 export type ChatHeaderItem = { title: string; isHeader: true; id: string };
