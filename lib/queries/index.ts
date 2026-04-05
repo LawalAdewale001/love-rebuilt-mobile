@@ -111,6 +111,7 @@ export type ChatConversation = {
   } | null;
   members: ChatMember[];
   totalMembers: number;
+  isMember: boolean;
   isBlocked: boolean;
   blockedMe: boolean;
   unreadCount?: number;
@@ -303,6 +304,31 @@ export function useReportMutation() {
       apiClient.post('/api/chat/report', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
+    },
+  });
+}
+
+export function useJoinGroupMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (groupId: string) =>
+      apiClient.post(`/api/chat/groups/${groupId}/join`),
+    onSuccess: (_, groupId) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
+      queryClient.invalidateQueries({ queryKey: [...queryKeys.chats(), groupId] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.messages(groupId) });
+    },
+  });
+}
+
+export function useLeaveGroupMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (groupId: string) =>
+      apiClient.delete(`/api/chat/groups/${groupId}/leave`),
+    onSuccess: (_, groupId) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
+      queryClient.invalidateQueries({ queryKey: [...queryKeys.chats(), groupId] });
     },
   });
 }

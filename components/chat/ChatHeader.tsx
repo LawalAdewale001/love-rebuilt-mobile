@@ -47,6 +47,7 @@ interface ChatHeaderProps {
   isBlocked: boolean;
   onUnblock: () => void;
   isUnblocking?: boolean;
+  isMember?: boolean;
 }
 
 export function ChatHeader({
@@ -65,6 +66,7 @@ export function ChatHeader({
   isBlocked,
   onUnblock,
   isUnblocking,
+  isMember = true,
 }: ChatHeaderProps) {
   const router = useRouter();
   const likeScale = useRef(new Animated.Value(1)).current;
@@ -133,8 +135,8 @@ export function ChatHeader({
             </Box>
           )}
 
-          <VStack flex={1}>
-            <Text fontSize={17} fontWeight="$bold" color="#1A1A1A" numberOfLines={1} ellipsizeMode="tail">
+          <VStack flex={1} mr="$2">
+            <Text fontSize={17} fontWeight="$600" color="#1A1A1A" numberOfLines={1} ellipsizeMode="tail">
               {name}
             </Text>
             {!isGroup && (
@@ -156,9 +158,36 @@ export function ChatHeader({
               </Animated.View>
             </Pressable>
           )}
-          <Pressable onPress={() => setShowOptions(!showOptions)} disabled={isUploading || isUnblocking}>
-            <MaterialIcons name="more-vert" size={24} color={(isUploading || isUnblocking) ? "#BDBDBD" : "#1A1A1A"} />
-          </Pressable>
+          {isGroup && !isMember ? (
+            <Pressable 
+              bg={PRIMARY_COLOR} 
+              px="$4" 
+              py="$2" 
+              borderRadius="$full" 
+              onPress={() => openSheet("joinGroup")}
+              sx={{
+                ":hover": { opacity: 0.8 },
+                ":active": { opacity: 0.7 },
+              }}
+            >
+              <Text color="#FFFFFF" fontSize={14} fontWeight="$bold">Join</Text>
+            </Pressable>
+          ) : (
+            <Pressable 
+              onPress={() => setShowOptions(!showOptions)} 
+              disabled={isUploading || isUnblocking}
+              bg="transparent"
+              p="$2"
+              borderRadius="$full"
+              hitSlop={15}
+            >
+              <MaterialIcons 
+                name="more-vert" 
+                size={26} 
+                color={(isUploading || isUnblocking) ? "#BDBDBD" : "#1A1A1A"} 
+              />
+            </Pressable>
+          )}
         </HStack>
       </HStack>
 

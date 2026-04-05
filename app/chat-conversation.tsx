@@ -33,7 +33,7 @@ import { ChatModals } from "@/components/chat/ChatModals";
 import { useChatSocket } from "@/hooks/use-chat-socket";
 import { useS3Upload } from "@/hooks/use-s3-upload";
 import { getAuthUser } from "@/lib/auth-store";
-import { queryKeys, useMessagesQuery, type ChatMessage as ApiChatMessage, type ChatConversation, useBlockMutation, useReportMutation, useConversationQuery, useUnblockMutation, useChatListQuery } from "@/lib/queries";
+import { queryKeys, useMessagesQuery, type ChatMessage as ApiChatMessage, type ChatConversation, type ChatMember, useBlockMutation, useReportMutation, useConversationQuery, useUnblockMutation, useChatListQuery, useJoinGroupMutation, useLeaveGroupMutation } from "@/lib/queries";
 import { emitDeleteMessage, emitEditMessage, emitSendMessage, emitTyping } from "@/lib/socket";
 
 import { MessageType, type ChatListItem, type ChatMessage, type SheetType } from "@/types/chat.types";
@@ -77,7 +77,7 @@ function EmptyChatState({ name }: { name: string }) {
         <Text fontSize={18} fontWeight="$600" color="#1A1A1A" textAlign="center">
           No Messages Yet
         </Text>
-        <Text fontSize={14} color="#999999" textAlign="center">
+        <Text fontSize={14} color="#999999" textAlign="center" numberOfLines={2}>
           Say hi to {name}! Start a conversation and get to know each other better.
         </Text>
       </VStack>
@@ -128,7 +128,7 @@ export default function ChatConversationScreen() {
   const { data: conversationData } = useConversationQuery(chatId);
   const { data: chatListData } = useChatListQuery();
   
-  const conversation = useMemo(() => {
+  const conversation = useMemo<ChatConversation | null>(() => {
     if (conversationData) return conversationData;
     // Fallback search in chat list cache
     if (chatListData?.pages) {
@@ -142,6 +142,7 @@ export default function ChatConversationScreen() {
 
   const isBlocked = conversation?.isBlocked;
   const blockedMe = conversation?.blockedMe;
+  const isMember = isGroup ? (conversation?.isMember ?? false) : true; 
 
   // ── Message state ──────────────────────────────────────────────────────────
   const { data: messagesData, fetchNextPage, hasNextPage, isFetchingNextPage, refetch, isLoading: isMessagesLoading } = useMessagesQuery(chatId);
@@ -268,11 +269,9 @@ export default function ChatConversationScreen() {
   }, [compatKey]);
 
   useEffect(() => {
-    if (!isGroup) return;
-    AsyncStorage.getItem(joinedKey).then((val) => {
-      if (val !== "1") setTimeout(() => openSheet("joinGroup"), 500);
-    });
-  }, [isGroup, joinedKey]);
+    if (!isGroup || !conversationData || conversationData.isMember) return;
+    setTimeout(() => openSheet("joinGroup"), 500);
+  }, [isGroup, conversationData?.isMember]);
 
   // ── Sheet helpers ──────────────────────────────────────────────────────────
   const openSheet = useCallback((type: SheetType) => {
@@ -469,6 +468,29 @@ export default function ChatConversationScreen() {
   const blockMutation = useBlockMutation();
   const unblockMutation = useUnblockMutation();
   const reportMutation = useReportMutation();
+  const joinGroupMutation = useJoinGroupMutation();
+  const leaveGroupMutation = useLeaveGroupMutation();
+
+  const handleJoinGroup = async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await joinGroupMutation.mutateAsync(chatId);
+      closeSheet();
+    } catch (err) {
+      console.error("Failed to join group:", err);
+    }
+  };
+
+  const handleLeaveGroup = async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await leaveGroupMutation.mutateAsync(chatId);
+      closeSheet();
+      router.back();
+    } catch (err) {
+      console.error("Failed to leave group:", err);
+    }
+  };
 
   const handleBlock = async () => {
     try {
@@ -643,6 +665,7 @@ export default function ChatConversationScreen() {
             isBlocked={!!isBlocked}
             onUnblock={handleUnblock}
             isUnblocking={unblockMutation.isPending}
+            isMember={isMember}
           />
 
           {/* Upload Status Overlay */}
@@ -726,6 +749,7 @@ export default function ChatConversationScreen() {
             showCompatibility={showCompatibility}
             onDismissCompatibility={dismissCompatibility}
             isGroup={isGroup}
+            isMember={isMember}
             inputBarPanResponder={inputBarPanResponder}
             conversationPartnerName={name}
             isBlocked={isBlocked}
@@ -798,6 +822,16 @@ export default function ChatConversationScreen() {
         isUnblocking={unblockMutation.isPending}
         isReporting={reportMutation.isPending}
         isDeleting={isDeleting}
+        onLeaveGroup={handleLeaveGroup}
+        isLeavingGroup={leaveGroupMutation.isPending}
+        groupImage={conversation?.image}
+        groupDescription={conversation?.description}
+        totalMembers={conversation?.totalMembers}
+        membersNames={conversation?.members?.map((m: ChatMember) => m.name)}
+        membersAvatars={conversation?.members?.map((m: ChatMember) => m.avatar || "")}
+        isMember={isMember}
+        onJoinGroup={handleJoinGroup}
+        isJoiningGroup={joinGroupMutation.isPending}
       />
     </SafeAreaView>
   );

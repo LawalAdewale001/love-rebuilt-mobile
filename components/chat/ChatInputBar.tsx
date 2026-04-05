@@ -48,6 +48,7 @@ interface ChatInputBarProps {
   onDismissCompatibility: () => void;
   // Sheet handle (private chats only)
   isGroup: boolean;
+  isMember?: boolean;
   inputBarPanResponder: PanResponderInstance;
   conversationPartnerName: string;
   isBlocked?: boolean;
@@ -89,6 +90,7 @@ export function ChatInputBar({
   blockedMe,
   onUnblock,
   isUnblocking,
+  isMember = true,
 }: ChatInputBarProps) {
   const formatTime = (secs: number) =>
     `${Math.floor(secs / 60).toString().padStart(2, "0")}:${(secs % 60).toString().padStart(2, "0")}`;
@@ -207,7 +209,7 @@ export function ChatInputBar({
       <Box bg="#FFFFFF" borderTopWidth={1} borderTopColor="#F4F3F2">
 
         {/* ── Normal Input ── */}
-        {!isRecording && !recordedUri && !isBlocked && !blockedMe && (
+        {!isRecording && !recordedUri && !isBlocked && !blockedMe && isMember && (
           <HStack px="$4" py="$2" alignItems="center" space="sm">
             <Pressable w={36} h={36} justifyContent="center" alignItems="center"
               onPress={onImagePick} disabled={isUploading}
@@ -261,6 +263,17 @@ export function ChatInputBar({
               )}
             </Pressable>
           </HStack>
+        )}
+
+        {/* ── Join Group Banner ── */}
+        {!isMember && isGroup && (
+          <Box px="$4" py="$3" alignItems="center" justifyContent="center">
+            <Box bg="#F5F5F5" px="$6" py="$3" borderRadius={12} w="100%" alignItems="center" justifyContent="center">
+               <Text fontSize={14} color="#666666" textAlign="center" fontWeight="$medium">
+                 Join this group to participate in the conversation.
+               </Text>
+            </Box>
+          </Box>
         )}
 
         {/* ── Blocked Banner ── */}

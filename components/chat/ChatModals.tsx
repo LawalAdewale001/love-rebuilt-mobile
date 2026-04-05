@@ -6,7 +6,7 @@
 
 import { DualStarburstFrame } from "@/components/ui/chat-icons";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { Box, HStack, Pressable, ScrollView, Text } from "@gluestack-ui/themed";
+import { Box, HStack, Pressable, ScrollView, Text, VStack } from "@gluestack-ui/themed";
 import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
@@ -80,6 +80,16 @@ interface ChatModalsProps {
   sheetAnim: Animated.Value;
   sheetPanResponder: PanResponderInstance;
 
+  // Group details for Join modal
+  groupImage?: string | null;
+  groupDescription?: string | null;
+  totalMembers?: number;
+  membersNames?: string[];
+  membersAvatars?: string[];
+  isMember?: boolean;
+  onJoinGroup?: () => void;
+  isJoiningGroup?: boolean;
+
   // New props for Block / Report
   onBlock?: () => void;
   onReport?: (text: string) => void;
@@ -87,6 +97,8 @@ interface ChatModalsProps {
   isUnblocking?: boolean;
   isReporting?: boolean;
   isDeleting?: boolean;
+  onLeaveGroup?: () => void;
+  isLeavingGroup?: boolean;
 }
 
 // ─── Drag handle sub-component ───────────────────────────────────────────────
@@ -147,8 +159,18 @@ export function ChatModals({
   isUnblocking,
   isReporting,
   isDeleting,
+  groupImage,
+  groupDescription,
+  totalMembers = 0,
+  membersNames = [],
+  membersAvatars = [],
+  isMember = true,
+  onJoinGroup,
+  isJoiningGroup,
+  onLeaveGroup,
+  isLeavingGroup,
 }: ChatModalsProps) {
-  const isAnyActionInProgress = isBlocking || isUnblocking || isReporting || isDeleting;
+  const isAnyActionInProgress = isBlocking || isUnblocking || isReporting || isDeleting || isJoiningGroup || isLeavingGroup;
   return (
     <>
       {/* ── Full-screen image viewer ── */}
@@ -316,8 +338,16 @@ export function ChatModals({
       </Modal>
 
       {/* ── Generic bottom sheets (leave / block / report / join / meetup) ── */}
-      <Modal visible={!!activeSheet} transparent animationType="none" statusBarTranslucent>
-        <TouchableWithoutFeedback onPress={onCloseSheet}>
+      <Modal visible={!!activeSheet} transparent animationType="none" statusBarTranslucent
+        onRequestClose={() => {
+          if (activeSheet === "joinGroup" && !isMember) return;
+          onCloseSheet();
+        }}
+      >
+        <TouchableWithoutFeedback onPress={() => {
+          if (activeSheet === "joinGroup" && !isMember) return;
+          onCloseSheet();
+        }}>
           <Box flex={1} bg="rgba(0,0,0,0.5)" justifyContent="flex-end">
             <TouchableWithoutFeedback>
               <Animated.View style={{ transform: [{ translateY: sheetAnim }] }}>
@@ -330,11 +360,21 @@ export function ChatModals({
                       Are you sure you want to{"\n"}exit {name} group?
                     </Text>
                     <Pressable borderWidth={1.5} borderColor="#FFFFFF" borderRadius={28} py="$3"
-                      alignItems="center" mb="$3" onPress={onCloseSheet}
+                      alignItems="center" mb="$3" 
+                      onPress={() => onLeaveGroup?.()}
+                      disabled={isAnyActionInProgress}
+                      opacity={isAnyActionInProgress ? 0.6 : 1}
                     >
-                      <Text fontSize={16} fontWeight="$semibold" color="#FFFFFF">Yes</Text>
+                      {isLeavingGroup ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Text fontSize={16} fontWeight="$semibold" color="#FFFFFF">Yes</Text>
+                      )}
                     </Pressable>
-                    <Pressable bg="#FFFFFF" borderRadius={28} py="$3" alignItems="center" onPress={onCloseSheet}>
+                    <Pressable bg="#FFFFFF" borderRadius={28} py="$3" alignItems="center" onPress={onCloseSheet}
+                      disabled={isAnyActionInProgress}
+                      opacity={isAnyActionInProgress ? 0.6 : 1}
+                    >
                       <Text fontSize={16} fontWeight="$bold" color="#1A1A1A">No</Text>
                     </Pressable>
                   </Box>
@@ -504,21 +544,87 @@ export function ChatModals({
 
                 {/* Join Group */}
                 {activeSheet === "joinGroup" && (
-                  <Box bg={PRIMARY_COLOR} borderTopLeftRadius={24} borderTopRightRadius={24} px="$6" pb="$8">
-                    <DragHandle panHandlers={sheetPanResponder.panHandlers} />
-                    <Text fontSize={20} fontWeight="$bold" color="#FFFFFF" textAlign="center" mb="$6" px="$2">
-                      Welcome to {name}!{"\n"}Would you like to join?
-                    </Text>
-                    <Pressable bg="#FFFFFF" borderRadius={28} py="$3"
-                      alignItems="center" mb="$3" onPress={onCloseSheet}
+                  <Box bg="#E86A7A" borderTopLeftRadius={40} borderTopRightRadius={40} px="$6" pb="$12" pt="$4">
+                    {!isMember && <Box h={10} />}
+                    {isMember && <DragHandle panHandlers={sheetPanResponder.panHandlers} />}
+                    
+                    <VStack alignItems="center" space="md" mb="$6">
+                      <Box mb="$2">
+                        {/* Use a flower-like or curvy starburst frame for the group image */}
+                        <Box 
+                          bg="#FFFFFF" 
+                          p="$1" 
+                          borderRadius={70} 
+                          shadowColor="#000" 
+                          shadowOffset={{ width: 0, height: 4 }} 
+                          shadowOpacity={0.1} 
+                          shadowRadius={8} 
+                          elevation={5}
+                        >
+                          <Image
+                            source={{ uri: groupImage || "https://images.unsplash.com/photo-1523712999610-f77fbcfc3843?w=300" }} 
+                            style={{ width: 120, height: 120, borderRadius: 60 }} 
+                            contentFit="cover"
+                          />
+                        </Box>
+                      </Box>
+ 
+                      <Text fontSize={22} fontWeight="$bold" color="#FFFFFF" textAlign="center" mt="$2" numberOfLines={1} ellipsizeMode="tail" px="$4">
+                        {name}
+                      </Text>
+                      
+                      <Text fontSize={15} color="rgba(255,255,255,0.9)" textAlign="center" px="$4" lineHeight={22}>
+                        {groupDescription || `A group where ${name.toLowerCase()} is discussed and love is found.`}
+                      </Text>
+ 
+                      <HStack alignItems="center" space="xs" mt="$2">
+                        <HStack space="xs" mr="$2">
+                          {(membersAvatars.length > 0 ? membersAvatars.slice(0, 3) : [1, 2, 3]).map((avatar, idx) => (
+                            <Box key={idx} w={32} h={32} borderRadius={16} borderWidth={2} borderColor="#FFFFFF" overflow="hidden" ml={idx === 0 ? 0 : -10} bg="#F0C4C8">
+                              {typeof avatar === "string" ? (
+                                <Image 
+                                  source={{ uri: avatar }} 
+                                  style={{ width: "100%", height: "100%" }}
+                                />
+                              ) : (
+                                <Box flex={1} justifyContent="center" alignItems="center">
+                                  <MaterialIcons name="person" size={16} color="#FFFFFF" />
+                                </Box>
+                              )}
+                            </Box>
+                          ))}
+                        </HStack>
+                        <Text fontSize={15} fontWeight="$semibold" color="#FFFFFF">
+                          {totalMembers > 0 ? (
+                            `+${totalMembers > 3 ? totalMembers - 3 : 0} ${membersNames.length > 0 ? membersNames[0] : "Everyone"} is here`
+                          ) : (
+                            "Be the first to join!"
+                          )}
+                        </Text>
+                      </HStack>
+                    </VStack>
+
+                    <Pressable 
+                      bg="#FFFFFF" 
+                      borderRadius={28} 
+                      py="$4"
+                      alignItems="center" 
+                      mb="$3" 
+                      onPress={onJoinGroup}
+                      disabled={isJoiningGroup}
                     >
-                      <Text fontSize={16} fontWeight="$bold" color={PRIMARY_COLOR}>Join Group</Text>
+                      {isJoiningGroup ? (
+                        <ActivityIndicator size="small" color="#E86A7A" />
+                      ) : (
+                        <Text fontSize={18} fontWeight="$bold" color="#E86A7A">Join {name}</Text>
+                      )}
                     </Pressable>
-                    <Pressable borderWidth={1.5} borderColor="#FFFFFF" borderRadius={28} py="$3"
-                      alignItems="center" onPress={onCloseSheet}
-                    >
-                      <Text fontSize={16} fontWeight="$semibold" color="#FFFFFF">Not now</Text>
-                    </Pressable>
+                    
+                    {!isMember && (
+                      <Pressable py="$2" alignItems="center" onPress={() => onCloseSheet()}>
+                         <Text fontSize={14} color="rgba(255,255,255,0.7)">Go back</Text>
+                      </Pressable>
+                    )}
                   </Box>
                 )}
 

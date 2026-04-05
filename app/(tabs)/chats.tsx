@@ -355,8 +355,8 @@ export default function ChatsScreen() {
                 </HStack>
               </HStack>
               {typingMap[chat.id] ? (
-                <Text fontSize={13} color={PRIMARY_COLOR} fontStyle="italic">
-                  Is typing...
+                <Text fontSize={13} color={PRIMARY_COLOR} fontStyle="italic" numberOfLines={1}>
+                  {typingMap[chat.id].split(" ")[0]} is typing...
                 </Text>
               ) : chat.lastMessage ? (
                 <HStack alignItems="center" space="xs">
@@ -388,10 +388,6 @@ export default function ChatsScreen() {
                             : chat.lastMessage.type.charAt(0).toUpperCase() + chat.lastMessage.type.slice(1)}
                   </Text>
                 </HStack>
-              ) : typingMap[chat.id] ? (
-                <Text fontSize={13} color={PRIMARY_COLOR} fontStyle="italic">
-                  Typing...
-                </Text>
               ) : (
                 <Text fontSize={13} color="#CCCCCC" numberOfLines={1}>
                   No messages yet
@@ -402,7 +398,7 @@ export default function ChatsScreen() {
         </Pressable>
       );
     },
-    [currentUserId, router]
+    [currentUserId, router, typingMap]
   );
 
   const isLoading = isSearching ? isSearchLoading : isListLoading;
@@ -500,6 +496,7 @@ export default function ChatsScreen() {
         ) : (
           <FlatList
             data={filteredChats}
+            extraData={typingMap}
             keyExtractor={(item) => item.id}
             renderItem={renderChatItem}
             onEndReached={() => {
