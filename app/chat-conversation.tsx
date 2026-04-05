@@ -172,6 +172,7 @@ export default function ChatConversationScreen() {
         deleted: m.isDeleted,
         type: mappedType,
         mediaUrl: m.mediaUrl || undefined,
+        edited: m.updatedAt !== m.createdAt,
       };
     });
   }, [messagesData, currentUserId, isGroup]);
