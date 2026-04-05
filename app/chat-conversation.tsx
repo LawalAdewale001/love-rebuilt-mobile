@@ -749,6 +749,7 @@ export default function ChatConversationScreen() {
             onUnblock={handleUnblock}
             isUnblocking={unblockMutation.isPending}
             isMember={isMember}
+            chatId={chatId}
           />
 
           {/* Upload Status Overlay */}

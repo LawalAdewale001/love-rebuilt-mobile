@@ -16,6 +16,7 @@ export const queryKeys = {
   chatSearch: (query: string) => [...queryKeys.all, 'chatSearch', query] as const,
   messages: (conversationId: string) => [...queryKeys.all, 'messages', conversationId] as const,
   blockedUsers: () => [...queryKeys.all, 'blockedUsers'] as const,
+  callToken: (channelName: string, uid?: string) => [...queryKeys.all, 'callToken', channelName, uid ?? null] as const,
 };
 
 // ─── Auth types
@@ -366,5 +367,28 @@ export function useChatProgressMutation() {
       queryClient.invalidateQueries({ queryKey: [...queryKeys.chats(), variables.conversationId] });
       queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
     },
+  });
+}
+
+export type CallTokenResponse = {
+  token: string;
+  channelName: string;
+  uid: string;
+};
+
+export function useCallTokenQuery(channelName: string, uid?: string) {
+  const params: Record<string, string> = { channelName };
+  if (uid) params.uid = uid;
+  
+  return useQuery({
+    queryKey: queryKeys.callToken(channelName, uid),
+    queryFn: () =>
+      apiClient.get<CallTokenResponse>('/api/call/token', {
+        params,
+      }),
+    enabled: !!channelName,
+    staleTime: 0,
+    gcTime: 0,
+    retry: 1,
   });
 }

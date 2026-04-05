@@ -12,7 +12,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.loverebuilt",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "LoveRebuilt needs access to your camera for video calls.",
+        "NSMicrophoneUsageDescription": "LoveRebuilt needs access to your microphone for audio and video calls."
       }
     },
     "android": {
@@ -24,7 +26,8 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.loverebuilt"
+      "package": "com.loverebuilt",
+      "permissions": ["CAMERA", "RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS"]
     },
     "web": {
       "output": "static",
@@ -48,7 +51,7 @@
         "@react-native-community/datetimepicker",
         {
           "android": {
-            "datePicker": {
+            "light": {
               "colorAccent": "#E86A7A",
               "colorPrimary": "#E86A7A",
               "colorControlActivated": "#E86A7A",
@@ -57,14 +60,14 @@
               "textColor": "#1A1A1A",
               "textColorPrimary": "#1A1A1A"
             },
-            "timePicker": {
+            "dark": {
               "colorAccent": "#E86A7A",
               "colorPrimary": "#E86A7A",
               "colorControlActivated": "#E86A7A",
               "headerBackground": "#E86A7A",
               "headerTextColor": "#FFFFFF",
-              "textColor": "#1A1A1A",
-              "textColorPrimary": "#1A1A1A"
+              "textColor": "#FFFFFF",
+              "textColorPrimary": "#FFFFFF"
             }
           }
         }
@@ -81,6 +84,20 @@
             "cropToolbarActionTextColor": "#E86A7A",
             "cropBackButtonIconColor": "#1A1A1A",
             "cropBackgroundColor": "#FFFFFF"
+          }
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 24,
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "buildToolsVersion": "36.0.0",
+            "enableProguardInReleaseBuilds": true,
+            "allowBackup": false,
+            "enableShrinkResourcesInReleaseBuilds": true
           }
         }
       ]

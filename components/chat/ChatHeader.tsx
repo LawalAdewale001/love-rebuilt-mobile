@@ -48,6 +48,7 @@ interface ChatHeaderProps {
   onUnblock: () => void;
   isUnblocking?: boolean;
   isMember?: boolean;
+  chatId: string;
 }
 
 export function ChatHeader({
@@ -67,6 +68,7 @@ export function ChatHeader({
   onUnblock,
   isUnblocking,
   isMember = true,
+  chatId,
 }: ChatHeaderProps) {
   const router = useRouter();
   const likeScale = useRef(new Animated.Value(1)).current;
@@ -215,7 +217,7 @@ export function ChatHeader({
               onPress={() => {
                 setShowOptions(false);
                 if (option.callType) {
-                  router.push({ pathname: "/call-screen", params: { name, type: option.callType } });
+                  router.push({ pathname: "/call-screen", params: { name, type: option.callType, chatId, avatar } });
                 } else if (option.label === "Block" || option.label === "Unblock") {
                   if (isBlocked) {
                     onUnblock();

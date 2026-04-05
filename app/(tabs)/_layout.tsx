@@ -1,31 +1,46 @@
-import { HapticTab } from "@/components/haptic-tab";
-import { IconSymbol } from "@/components/ui/icon-symbol";
+import { TabIcon } from "@/components/navigation/TabIcon";
+import { useChatListQuery } from "@/lib/queries";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Tabs } from "expo-router";
-import React from "react";
+import React, { useMemo } from "react";
+import { Platform } from "react-native";
 
+/**
+ * Tab bar configuration with custom SVG icons and sleek animations.
+ */
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const { data } = useChatListQuery();
+
+  const totalUnreadCount = useMemo(() => {
+    if (!data?.pages) return 0;
+    return data.pages.reduce((acc, page) => {
+      return acc + (page.result?.reduce((pAcc, chat) => pAcc + (chat.unreadCount || 0), 0) || 0);
+    }, 0);
+  }, [data]);
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: "#E86673", // Your primary pink color
-        tabBarInactiveTintColor: "#8E8E93",
+        tabBarActiveTintColor: "#E86A7A", // Updated to match user's SVG color
+        tabBarInactiveTintColor: "#7F7F7F", // Updated to match user's inactive SVG color
         headerShown: false,
-        tabBarButton: HapticTab,
         tabBarStyle: {
           backgroundColor: "#FFFFFF",
           borderTopWidth: 1,
-          borderTopColor: "#F4F3F2",
-          height: 85,
-          paddingTop: 10,
-          paddingBottom: 25,
+          borderTopColor: "#EEEEEE",
+          height: Platform.OS === 'ios' ? 110 : 100,
+          paddingTop: 8,
+          paddingBottom: Platform.OS === 'ios' ? 38 : 15,
+          elevation: 0,
+          shadowOpacity: 0,
+          borderTopLeftRadius: 0,
+          borderTopRightRadius: 0,
         },
         tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: "500",
-          marginTop: 4,
+          fontSize: 10,
+          fontWeight: "600",
+          marginTop: 2,
         },
       }}
     >
@@ -33,9 +48,8 @@ export default function TabLayout() {
         name="index"
         options={{
           title: "Discover",
-          // Using placeholder icons, map these to your specific IconSymbol icons
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={24} name="flame" color={color} />
+          tabBarIcon: ({ focused }) => (
+            <TabIcon name="index" focused={focused} />
           ),
         }}
       />
@@ -43,8 +57,8 @@ export default function TabLayout() {
         name="matches"
         options={{
           title: "Matches",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={24} name="heart" color={color} />
+          tabBarIcon: ({ focused }) => (
+            <TabIcon name="matches" focused={focused} />
           ),
         }}
       />
@@ -52,17 +66,26 @@ export default function TabLayout() {
         name="chats"
         options={{
           title: "Chats",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={24} name="message" color={color} />
+          tabBarIcon: ({ focused }) => (
+            <TabIcon name="chats" focused={focused} />
           ),
+          tabBarBadge: totalUnreadCount > 0 ? totalUnreadCount : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: "#E86A7A",
+            fontSize: 10,
+            lineHeight: 14,
+            height: 16,
+            minWidth: 16,
+            borderRadius: 8,
+          }
         }}
       />
       <Tabs.Screen
         name="learn"
         options={{
           title: "Learn",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={24} name="play.desktopcomputer" color={color} />
+          tabBarIcon: ({ focused }) => (
+            <TabIcon name="learn" focused={focused} />
           ),
         }}
       />
@@ -70,11 +93,12 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={24} name="person" color={color} />
+          tabBarIcon: ({ focused }) => (
+            <TabIcon name="profile" focused={focused} />
           ),
         }}
       />
     </Tabs>
   );
 }
+
