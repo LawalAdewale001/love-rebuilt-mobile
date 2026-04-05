@@ -197,6 +197,7 @@ export type ChatMessage = {
   replyTo: {
     id: string;
     content: string;
+    type: string;
     senderId: string;
     sender: MessageSender;
   } | null;
@@ -348,6 +349,21 @@ export function useCreateMeetupMutation() {
       apiClient.post('/api/chat/meetups', data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.messages(variables.conversationId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
+    },
+  });
+}
+
+export function useChatProgressMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { conversationId: string; reason: string; showChatProgressBanner: boolean }) =>
+      apiClient.post(`/api/chat/${data.conversationId}/progress`, {
+        reason: data.reason,
+        showChatProgressBanner: data.showChatProgressBanner,
+      }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: [...queryKeys.chats(), variables.conversationId] });
       queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
     },
   });

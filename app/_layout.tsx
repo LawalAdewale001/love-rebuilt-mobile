@@ -22,6 +22,7 @@ import { useEffect, useState } from "react";
 import "react-native-reanimated";
 
 import { ToastProvider } from "@/components/ui/toast";
+import { OfflineBanner } from "@/components/ui/OfflineBanner";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import "@/lib/api-client-interceptors"; // Registers axios interceptors for protected routes
 import { getAccessToken, loadAuth } from "@/lib/auth-store";
@@ -106,6 +107,7 @@ export default function RootLayout() {
               />
             </Stack>
             <StatusBar style="auto" />
+            <OfflineBanner />
           </ToastProvider>
         </ThemeProvider>
       </GluestackUIProvider>

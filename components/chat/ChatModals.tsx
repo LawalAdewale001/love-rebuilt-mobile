@@ -1,6 +1,6 @@
 /**
  * ChatModals — all modals and bottom sheets for the chat conversation screen.
- * Includes: full-screen image, delete confirmation, forward, questionnaire,
+ * Includes: full-screen image, delete confirmation, questionnaire,
  * and the leave/block/report/joinGroup/planMeetup bottom sheets.
  */
 
@@ -41,20 +41,20 @@ interface ChatModalsProps {
   onDeleteForMe: (msg: ChatMessage) => void;
   onDeleteForEveryone: (msg: ChatMessage) => void;
 
-  // Forward
-  forwardMsg: ChatMessage | null;
-  onCloseForwardMsg: () => void;
-
   // Questionnaire
   showQuestionnaire: boolean;
   questionnaireStep: "question" | "success";
   setQuestionnaireStep: (step: "question" | "success") => void;
   selectedOptions: string[];
   toggleOption: (opt: string) => void;
-  onSubmitQuestionnaire: () => void;
+  onSubmitQuestionnaire: (reason: string) => void;
   onCloseQuestionnaire: () => void;
   slideAnim: Animated.Value;
   panResponder: PanResponderInstance;
+  showChatProgressBanner?: boolean;
+  myAvatar?: string | null;
+  partnerAvatar?: string | null;
+  isSubmittingQuestionnaire?: boolean;
 
   // Generic sheets
   activeSheet: SheetType;
@@ -124,8 +124,6 @@ export function ChatModals({
   onCloseDeleteMsg,
   onDeleteForMe,
   onDeleteForEveryone,
-  forwardMsg,
-  onCloseForwardMsg,
   showQuestionnaire,
   questionnaireStep,
   selectedOptions,
@@ -173,8 +171,12 @@ export function ChatModals({
   isLeavingGroup,
   onCreateMeetup,
   isCreatingMeetup,
+  showChatProgressBanner = true,
+  myAvatar,
+  partnerAvatar,
+  isSubmittingQuestionnaire,
 }: ChatModalsProps) {
-  const isAnyActionInProgress = isBlocking || isUnblocking || isReporting || isDeleting || isJoiningGroup || isLeavingGroup || isCreatingMeetup;
+  const isAnyActionInProgress = isBlocking || isUnblocking || isReporting || isDeleting || isJoiningGroup || isLeavingGroup || isCreatingMeetup || isSubmittingQuestionnaire;
   return (
     <>
       {/* ── Full-screen image viewer ── */}
@@ -233,37 +235,7 @@ export function ChatModals({
         </TouchableWithoutFeedback>
       </Modal>
 
-      {/* ── Forward message ── */}
-      <Modal visible={!!forwardMsg} transparent animationType="fade" onRequestClose={onCloseForwardMsg}>
-        <TouchableWithoutFeedback onPress={onCloseForwardMsg}>
-          <Box flex={1} bg="rgba(0,0,0,0.5)" justifyContent="flex-end">
-            <TouchableWithoutFeedback>
-              <Box bg="#FFFFFF" borderTopLeftRadius={24} borderTopRightRadius={24}
-                pb="$6" pt="$4" px="$5" maxHeight={SCREEN_HEIGHT * 0.5}
-              >
-                <Text fontSize={18} fontWeight="$bold" color="#1A1A1A" mb="$1">Forward to</Text>
-                <Text fontSize={13} color="#999999" mb="$4">Select a chat to forward the message</Text>
-                <ScrollView showsVerticalScrollIndicator={false}>
-                  {["Patrica", "Princess", "Football Lovers", "Juliet", "Foodies"].map((contact) => (
-                    <Pressable key={contact}
-                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onCloseForwardMsg(); }}
-                      py="$3" borderBottomWidth={1} borderBottomColor="#F4F3F2"
-                    >
-                      <HStack alignItems="center" space="md">
-                        <Box w={36} h={36} borderRadius={18} bg="#F0C4C8" justifyContent="center" alignItems="center">
-                          <MaterialIcons name="person" size={20} color={PRIMARY_COLOR} />
-                        </Box>
-                        <Text fontSize={15} color="#1A1A1A" flex={1}>{contact}</Text>
-                        <MaterialIcons name="send" size={18} color={PRIMARY_COLOR} />
-                      </HStack>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              </Box>
-            </TouchableWithoutFeedback>
-          </Box>
-        </TouchableWithoutFeedback>
-      </Modal>
+
 
       {/* ── Questionnaire bottom sheet ── */}
       <Modal visible={showQuestionnaire} transparent animationType="none" statusBarTranslucent>
@@ -278,8 +250,8 @@ export function ChatModals({
                     <>
                       <Box alignItems="center" mb="$4">
                         <DualStarburstFrame width={310} height={210}
-                          leftImageUri="https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=600&h=800&fit=crop&crop=top"
-                          rightImageUri="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=600&h=800&fit=crop&crop=top"
+                          leftImageUri={myAvatar || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=600"}
+                          rightImageUri={partnerAvatar || "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=600"}
                         />
                       </Box>
                       <Text fontSize={20} fontWeight="$bold" color="#FFFFFF" textAlign="center" mb="$1">
@@ -304,13 +276,20 @@ export function ChatModals({
                         })}
                       </HStack>
                       <Pressable
-                        bg={selectedOptions.length > 0 ? "#FFFFFF" : "rgba(255,255,255,0.4)"}
+                        bg={selectedOptions.length > 0 && showChatProgressBanner && !isAnyActionInProgress ? "#FFFFFF" : "rgba(255,255,255,0.4)"}
                         borderRadius={28} py="$3" alignItems="center" mb="$3"
-                        onPress={selectedOptions.length > 0 ? onSubmitQuestionnaire : undefined}
+                        onPress={(selectedOptions.length > 0 && showChatProgressBanner && !isAnyActionInProgress) ? () => onSubmitQuestionnaire(selectedOptions[0]) : undefined}
+                        disabled={!showChatProgressBanner || selectedOptions.length === 0 || isAnyActionInProgress}
                       >
-                        <Text fontSize={16} fontWeight="$semibold"
-                          color={selectedOptions.length > 0 ? PRIMARY_COLOR : "rgba(255,255,255,0.6)"}
-                        >Submit</Text>
+                        {isSubmittingQuestionnaire ? (
+                          <ActivityIndicator size="small" color={PRIMARY_COLOR} />
+                        ) : (
+                          <Text fontSize={16} fontWeight="$semibold"
+                            color={selectedOptions.length > 0 && showChatProgressBanner ? PRIMARY_COLOR : "rgba(255,255,255,0.6)"}
+                          >
+                            {showChatProgressBanner ? "Submit" : "Already submitted"}
+                          </Text>
+                        )}
                       </Pressable>
                       <Pressable borderWidth={1.5} borderColor="#FFFFFF" borderRadius={28} py="$3"
                         alignItems="center" onPress={onCloseQuestionnaire}
@@ -322,8 +301,8 @@ export function ChatModals({
                     <>
                       <Box alignItems="center" mb="$4">
                         <DualStarburstFrame width={310} height={210}
-                          leftImageUri="https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=600&h=800&fit=crop&crop=top"
-                          rightImageUri="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=600&h=800&fit=crop&crop=top"
+                          leftImageUri={myAvatar || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=600"}
+                          rightImageUri={partnerAvatar || "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=600"}
                         />
                       </Box>
                       <Text fontSize={20} fontWeight="$bold" color="#FFFFFF" textAlign="center" mb="$6">

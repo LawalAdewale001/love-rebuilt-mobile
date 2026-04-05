@@ -17,7 +17,7 @@ export type ChatMessage = {
   createdAt: string;
   read?: boolean;
   sender?: string;
-  replyTo?: { id: string; text?: string; sender?: string };
+  replyTo?: { id: string; text?: string; sender?: string; type?: MessageType };
   edited?: boolean;
   deleted?: boolean;
   type?: MessageType;

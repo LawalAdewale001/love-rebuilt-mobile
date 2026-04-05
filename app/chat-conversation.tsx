@@ -33,7 +33,7 @@ import { ChatModals } from "@/components/chat/ChatModals";
 import { useChatSocket } from "@/hooks/use-chat-socket";
 import { useS3Upload } from "@/hooks/use-s3-upload";
 import { getAuthUser } from "@/lib/auth-store";
-import { queryKeys, useMessagesQuery, type ChatMessage as ApiChatMessage, type ChatConversation, type ChatMember, useBlockMutation, useReportMutation, useConversationQuery, useUnblockMutation, useChatListQuery, useJoinGroupMutation, useLeaveGroupMutation, useCreateMeetupMutation } from "@/lib/queries";
+import { queryKeys, useMessagesQuery, type ChatMessage as ApiChatMessage, type ChatConversation, type ChatMember, useBlockMutation, useReportMutation, useConversationQuery, useUnblockMutation, useChatListQuery, useJoinGroupMutation, useLeaveGroupMutation, useCreateMeetupMutation, useChatProgressMutation } from "@/lib/queries";
 import { emitDeleteMessage, emitEditMessage, emitSendMessage, emitTyping } from "@/lib/socket";
 
 import { MessageType, type ChatListItem, type ChatMessage, type SheetType } from "@/types/chat.types";
@@ -168,7 +168,12 @@ export default function ChatConversationScreen() {
         time: new Date(m.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
         read: m.isRead,
         sender: isGroup ? m.sender?.fullName : undefined,
-        replyTo: m.replyTo ? { id: m.replyTo.id, text: m.replyTo.content, sender: m.replyTo.sender?.fullName } : undefined,
+        replyTo: m.replyTo ? { 
+          id: m.replyTo.id, 
+          text: m.replyTo.content, 
+          sender: m.replyTo.sender?.fullName,
+          type: (m.replyTo.type === "voice" ? MessageType.AUDIO : m.replyTo.type === "pdf" ? MessageType.FILE : m.replyTo.type as MessageType) 
+        } : undefined,
         deleted: m.isDeleted,
         type: mappedType,
         mediaUrl: m.mediaUrl || undefined,
@@ -205,7 +210,7 @@ export default function ChatConversationScreen() {
       id: tempId, sent: true, time: "Now",
       createdAt: new Date().toISOString(), read: false, ...data,
     };
-    if (replyingTo) newMsg.replyTo = { id: replyingTo.id, text: replyingTo.text, sender: replyingTo.sender };
+    if (replyingTo) newMsg.replyTo = { id: replyingTo.id, text: replyingTo.text, sender: replyingTo.sender, type: replyingTo.type };
     setLocalMessages((prev) => [newMsg, ...prev]);
     return tempId;
   };
@@ -231,7 +236,6 @@ export default function ChatConversationScreen() {
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const [contextMsg, setContextMsg] = useState<ChatMessage | null>(null);
   const [deleteMsg, setDeleteMsg] = useState<ChatMessage | null>(null);
-  const [forwardMsg, setForwardMsg] = useState<ChatMessage | null>(null);
   const [editingMsg, setEditingMsg] = useState<ChatMessage | null>(null);
 
   // ── Recording ──────────────────────────────────────────────────────────────
@@ -478,6 +482,33 @@ export default function ChatConversationScreen() {
   const joinGroupMutation = useJoinGroupMutation();
   const leaveGroupMutation = useLeaveGroupMutation();
   const meetupMutation = useCreateMeetupMutation();
+  const progressMutation = useChatProgressMutation();
+
+  // Auto-show questionnaire logic
+  useEffect(() => {
+    if (isGroup || !conversation?.showChatProgressBanner || showQuestionnaire) return;
+    
+    // Count messages from both parties
+    const myCount = apiMessages.filter(m => m.sent).length;
+    const partnerCount = apiMessages.filter(m => !m.sent).length;
+    
+    if (myCount >= 5 && partnerCount >= 5) {
+      setShowQuestionnaire(true);
+    }
+  }, [apiMessages.length, isGroup, conversation?.showChatProgressBanner, showQuestionnaire]);
+
+  const handleProgressSubmit = async (reason: string) => {
+    try {
+      await progressMutation.mutateAsync({
+        conversationId: chatId,
+        reason,
+        showChatProgressBanner: false
+      });
+      setQuestionnaireStep("success");
+    } catch (error) {
+      console.error("Failed to submit progress:", error);
+    }
+  };
 
   const handleJoinGroup = async () => {
     try {
@@ -678,6 +709,24 @@ export default function ChatConversationScreen() {
     AsyncStorage.setItem(compatKey, "1");
   }, [compatKey]);
 
+  const scrollToMessage = (messageId: string | undefined) => {
+    if (!messageId || !flatListRef.current) return;
+    const flattened = getFlattenedMessages(messages);
+    const index = flattened.findIndex((m: any) => m.id === messageId);
+    if (index !== -1) {
+      flatListRef.current.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+    }
+  };
+
+  const handleOnScrollToIndexFailed = (error: any) => {
+    if (!flatListRef.current) return;
+    flatListRef.current.scrollToOffset({ offset: error.averageItemLength * error.index, animated: true });
+    setTimeout(() => {
+      if (!flatListRef.current) return;
+      flatListRef.current.scrollToIndex({ index: error.index, animated: true, viewPosition: 0.5 });
+    }, 100);
+  };
+
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }} edges={["top", "bottom"]}>
@@ -747,12 +796,14 @@ export default function ChatConversationScreen() {
                     conversationPartnerName={name}
                     onLongPress={setContextMsg}
                     onImagePress={setFullScreenImage}
+                    onReplyPress={scrollToMessage}
                   />
                 );
               }}
-              contentContainerStyle={{ flexGrow: 1, paddingVertical: 16 }}
-              style={{ flex: 1 }}
-            />
+               contentContainerStyle={{ flexGrow: 1, paddingVertical: 16 }}
+               style={{ flex: 1 }}
+               onScrollToIndexFailed={handleOnScrollToIndexFailed}
+             />
           )}
 
           {/* Input Bar (with banners + recording) */}
@@ -794,7 +845,6 @@ export default function ChatConversationScreen() {
         </Box>
       </KeyboardAvoidingView>
 
-      {/* Context Menu (long-press actions) */}
       {contextMsg && !contextMsg.deleted && (
         <ChatContextMenu
           msg={contextMsg}
@@ -802,7 +852,6 @@ export default function ChatConversationScreen() {
           onReply={() => { setReplyingTo(contextMsg); setContextMsg(null); }}
           onCopy={async () => { await Clipboard.setStringAsync(contextMsg?.text || ""); setContextMsg(null); }}
           onEdit={() => { setEditingMsg(contextMsg); setMessage(contextMsg?.text || ""); setContextMsg(null); }}
-          onForward={() => { setForwardMsg(contextMsg); setContextMsg(null); }}
           onDelete={() => { setDeleteMsg(contextMsg); setContextMsg(null); }}
         />
       )}
@@ -817,15 +866,17 @@ export default function ChatConversationScreen() {
         onCloseDeleteMsg={() => setDeleteMsg(null)}
         onDeleteForMe={handleDeleteForMe}
         onDeleteForEveryone={handleDeleteForEveryone}
-        forwardMsg={forwardMsg}
-        onCloseForwardMsg={() => setForwardMsg(null)}
         showQuestionnaire={showQuestionnaire}
         questionnaireStep={questionnaireStep}
         setQuestionnaireStep={setQuestionnaireStep}
         selectedOptions={selectedOptions}
         toggleOption={(opt) => setSelectedOptions((prev) => prev.includes(opt) ? [] : [opt])}
-        onSubmitQuestionnaire={() => setQuestionnaireStep("success")}
+        onSubmitQuestionnaire={handleProgressSubmit}
         onCloseQuestionnaire={closeQuestionnaire}
+        showChatProgressBanner={conversation?.showChatProgressBanner}
+        myAvatar={conversation?.members?.find(m => m.userId === currentUserId)?.avatar}
+        partnerAvatar={conversation?.members?.find(m => m.userId !== currentUserId)?.avatar}
+        isSubmittingQuestionnaire={progressMutation.isPending}
         slideAnim={slideAnim}
         panResponder={panResponder}
         activeSheet={activeSheet}

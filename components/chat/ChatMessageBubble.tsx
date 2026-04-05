@@ -14,6 +14,7 @@ interface ChatMessageBubbleProps {
   conversationPartnerName: string;
   onLongPress: (msg: ChatMessage) => void;
   onImagePress: (url: string) => void;
+  onReplyPress: (id: string | undefined) => void;
 }
 
 export function ChatMessageBubble({
@@ -22,6 +23,7 @@ export function ChatMessageBubble({
   conversationPartnerName,
   onLongPress,
   onImagePress,
+  onReplyPress,
 }: ChatMessageBubbleProps) {
   return (
     <Pressable
@@ -61,17 +63,32 @@ export function ChatMessageBubble({
             <>
               {/* Reply preview */}
               {msg.replyTo && (
-                <Box bg={msg.sent ? "rgba(0,0,0,0.12)" : "rgba(0,0,0,0.06)"} mx="$2" mt="$2" borderRadius={10} px="$3" py="$2">
-                  <Box borderLeftWidth={3} borderLeftColor={msg.sent ? "#FFFFFF" : PRIMARY_COLOR} pl="$2">
-                    <Text fontSize={11} fontWeight="$bold" color={msg.sent ? "#FFFFFF" : PRIMARY_COLOR}>
-                      {msg.replyTo.sender || conversationPartnerName}
-                    </Text>
-                    <Text fontSize={11} color={msg.sent ? "rgba(255,255,255,0.8)" : "#666666"} numberOfLines={1}>
-                      {msg.replyTo.text}
-                    </Text>
+                <Pressable onPress={() => onReplyPress(msg.replyTo?.id)}>
+                  <Box bg={msg.sent ? "rgba(0,0,0,0.12)" : "rgba(0,0,0,0.06)"} mx="$2" mt="$2" borderRadius={10} px="$3" py="$2">
+                    <Box borderLeftWidth={3} borderLeftColor={msg.sent ? "#FFFFFF" : PRIMARY_COLOR} pl="$2">
+                      <Text fontSize={11} fontWeight="$bold" color={msg.sent ? "#FFFFFF" : PRIMARY_COLOR}>
+                        {msg.replyTo.sender || conversationPartnerName}
+                      </Text>
+                      {msg.replyTo.type === MessageType.IMAGE ? (
+                        <HStack space="xs" alignItems="center">
+                          <MaterialIcons name="image" size={12} color={msg.sent ? "rgba(255,255,255,0.8)" : "#666666"} />
+                          <Text fontSize={11} color={msg.sent ? "rgba(255,255,255,0.8)" : "#666666"}>Photo</Text>
+                        </HStack>
+                      ) : msg.replyTo.type === MessageType.AUDIO ? (
+                         <HStack space="xs" alignItems="center">
+                          <MaterialIcons name="mic" size={12} color={msg.sent ? "rgba(255,255,255,0.8)" : "#666666"} />
+                          <Text fontSize={11} color={msg.sent ? "rgba(255,255,255,0.8)" : "#666666"}>Voice Note</Text>
+                        </HStack>
+                      ) : (
+                        <Text fontSize={11} color={msg.sent ? "rgba(255,255,255,0.8)" : "#666666"} numberOfLines={1}>
+                          {msg.replyTo.text || "Message"}
+                        </Text>
+                      )}
+                    </Box>
                   </Box>
-                </Box>
+                </Pressable>
               )}
+
 
               {/* Image */}
               {msg.type === MessageType.IMAGE && msg.mediaUrl && (
@@ -177,11 +194,10 @@ interface ChatContextMenuProps {
   onReply: () => void;
   onCopy: () => void;
   onEdit: () => void;
-  onForward: () => void;
   onDelete: () => void;
 }
 
-export function ChatContextMenu({ msg, onClose, onReply, onCopy, onEdit, onForward, onDelete }: ChatContextMenuProps) {
+export function ChatContextMenu({ msg, onClose, onReply, onCopy, onEdit, onDelete }: ChatContextMenuProps) {
   return (
     <Box position="absolute" top={0} left={0} right={0} bottom={0} zIndex={200}>
       <TouchableWithoutFeedback onPress={onClose}>
@@ -195,24 +211,19 @@ export function ChatContextMenu({ msg, onClose, onReply, onCopy, onEdit, onForwa
                 <MaterialIcons name="reply" size={22} color="#1A1A1A" />
                 <Text fontSize={11} color="#1A1A1A" mt="$0.5">Reply</Text>
               </Pressable>
-
+ 
               <Pressable alignItems="center" onPress={onCopy} px="$3" py="$1">
                 <MaterialIcons name="content-copy" size={22} color="#1A1A1A" />
                 <Text fontSize={11} color="#1A1A1A" mt="$0.5">Copy</Text>
               </Pressable>
-
+ 
               {msg.sent && (
                 <Pressable alignItems="center" onPress={onEdit} px="$3" py="$1">
                   <MaterialIcons name="edit" size={22} color="#1A1A1A" />
                   <Text fontSize={11} color="#1A1A1A" mt="$0.5">Edit</Text>
                 </Pressable>
               )}
-
-              <Pressable alignItems="center" onPress={onForward} px="$3" py="$1">
-                <MaterialIcons name="shortcut" size={22} color="#1A1A1A" />
-                <Text fontSize={11} color="#1A1A1A" mt="$0.5">Forward</Text>
-              </Pressable>
-
+ 
               <Pressable alignItems="center" onPress={onDelete} px="$3" py="$1">
                 <MaterialIcons name="delete-outline" size={22} color="#1A1A1A" />
                 <Text fontSize={11} color="#1A1A1A" mt="$0.5">Delete</Text>
