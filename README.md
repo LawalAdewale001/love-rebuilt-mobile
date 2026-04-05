@@ -23,6 +23,20 @@ In the output, you'll find options to open the app in a
 - [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
 - [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
 
+### ✅ Running development Build
+To ensure the app correctly connects to the local development server when using a physical device:
+1. **Network Connectivity**: Ensure both the PC and the phone are on the same network.
+   - Recommended: Hotspot your phone and connect the PC to that hotspot.
+2. **Physical Connection**: Connect your phone to the PC via a USB cable.
+3. **Port Forwarding**: Run the following command to route the traffic correctly:
+   ```bash
+   adb reverse tcp:8081 tcp:8081
+   ```
+4. **Start the app**:
+   ```bash
+   npx expo start --dev-client
+   ```
+
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
 ## Get a fresh project
