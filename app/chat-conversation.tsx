@@ -173,16 +173,18 @@ export default function ChatConversationScreen() {
         time: new Date(m.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
         read: m.isRead,
         sender: isGroup ? m.sender?.fullName : undefined,
-        replyTo: m.replyTo ? { 
-          id: m.replyTo.id, 
-          text: m.replyTo.content, 
+        senderId: m.senderId,
+        senderAvatar: isGroup ? (m.sender?.avatar ?? null) : undefined,
+        replyTo: m.replyTo ? {
+          id: m.replyTo.id,
+          text: m.replyTo.content,
           sender: m.replyTo.sender?.fullName,
-          type: (m.replyTo.type === "voice" ? MessageType.AUDIO : m.replyTo.type === "pdf" ? MessageType.FILE : m.replyTo.type as MessageType) 
+          type: (m.replyTo.type === "voice" ? MessageType.AUDIO : m.replyTo.type === "pdf" ? MessageType.FILE : m.replyTo.type as MessageType)
         } : undefined,
         deleted: m.isDeleted,
         type: mappedType,
         mediaUrl: m.mediaUrl || undefined,
-        edited: m.updatedAt !== m.createdAt,
+        edited: m.isEdited,
         meetup: m.meetup ? {
           title: m.meetup.title,
           location: m.meetup.location,
@@ -209,6 +211,8 @@ export default function ChatConversationScreen() {
     return [...filteredLocal, ...filteredApi];
   }, [localMessages, apiMessages, deletedIds]);
 
+  const flattenedMessages = useMemo(() => getFlattenedMessages(messages), [messages]);
+
   const addOptimisticMessage = (data: Partial<ChatMessage>) => {
     const tempId = `local-${Date.now()}`;
     const newMsg: ChatMessage = {
@@ -231,6 +235,8 @@ export default function ChatConversationScreen() {
 
   // ── UI state ───────────────────────────────────────────────────────────────
   const [message, setMessage] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const sendFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showOptions, setShowOptions] = useState(false);
   const [showCompatibility, setShowCompatibility] = useState(false);
   const [isLiked, setIsLiked] = useState(isLikedParam === "1");
@@ -607,19 +613,26 @@ export default function ChatConversationScreen() {
 
   // ── Chat actions ───────────────────────────────────────────────────────────
   const handleSend = () => {
-    if (!message.trim()) return;
+    if (!message.trim() || isSending) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (editingMsg) {
       emitEditMessage(editingMsg.id, message.trim());
       setLocalMessages((prev) => prev.map((m) => m.id === editingMsg.id ? { ...m, text: message.trim(), edited: true } : m));
       setMessage(""); setEditingMsg(null); return;
     }
+    setIsSending(true);
+    // Fallback: re-enable after 2s in case the socket ACK never arrives
+    if (sendFallbackRef.current) clearTimeout(sendFallbackRef.current);
+    sendFallbackRef.current = setTimeout(() => setIsSending(false), 2000);
+
     const tempId = addOptimisticMessage({ text: message.trim(), type: MessageType.TEXT });
     emitSendMessage(
       { conversationId: chatId, content: message.trim(), replyToId: replyingTo?.id, type: MessageType.TEXT },
       (res) => {
         const realId = res?.id || res?.data?.id || res?.result?.id;
         if (realId) updateMessageId(tempId, realId);
+        if (sendFallbackRef.current) clearTimeout(sendFallbackRef.current);
+        setIsSending(false);
       }
     );
     setMessage(""); setReplyingTo(null);
@@ -773,7 +786,7 @@ export default function ChatConversationScreen() {
           ) : (
             <FlatList
               ref={flatListRef}
-              data={getFlattenedMessages(messages)}
+              data={flattenedMessages}
               inverted={messages.length > 0}
               keyExtractor={(item: any) => item.id}
               onEndReached={() => hasNextPage && fetchNextPage()}
@@ -784,7 +797,7 @@ export default function ChatConversationScreen() {
                 </Box>
               ) : null}
               ListEmptyComponent={<EmptyChatState name={name} />}
-              renderItem={({ item }) => {
+              renderItem={({ item, index }) => {
                 const msg = item as ChatListItem;
                 if ("isHeader" in msg) {
                   return (
@@ -795,6 +808,16 @@ export default function ChatConversationScreen() {
                     </Box>
                   );
                 }
+                const prevItem = flattenedMessages[index - 1];
+                const nextItem = flattenedMessages[index + 1];
+                const showSenderName = isGroup && !msg.sent && (
+                  !prevItem || "isHeader" in prevItem ||
+                  (prevItem as ChatMessage).senderId !== msg.senderId
+                );
+                const showAvatar = isGroup && !msg.sent && (
+                  !nextItem || "isHeader" in nextItem ||
+                  (nextItem as ChatMessage).senderId !== msg.senderId
+                );
                 return (
                   <ChatMessageBubble
                     msg={msg}
@@ -803,9 +826,12 @@ export default function ChatConversationScreen() {
                     onLongPress={setContextMsg}
                     onImagePress={setFullScreenImage}
                     onReplyPress={scrollToMessage}
+                    showAvatar={showAvatar}
+                    showSenderName={showSenderName}
                   />
                 );
               }}
+              extraData={flattenedMessages}
                contentContainerStyle={{ flexGrow: 1, paddingVertical: 16 }}
                style={{ flex: 1 }}
                onScrollToIndexFailed={handleOnScrollToIndexFailed}
@@ -820,6 +846,7 @@ export default function ChatConversationScreen() {
             onImagePick={handleImagePick}
             onFilePick={handleFilePick}
             isUploading={isUploading}
+            isSending={isSending}
             isRecording={isRecording}
             recordedUri={recordedUri}
             recordingSeconds={recordingSeconds}

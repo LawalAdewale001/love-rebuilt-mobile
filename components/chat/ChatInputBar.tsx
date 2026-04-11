@@ -21,6 +21,7 @@ interface ChatInputBarProps {
   message: string;
   onChangeText: (text: string) => void;
   onSend: () => void;
+  isSending: boolean;
   // Media
   onImagePick: () => void;
   onFilePick: () => void;
@@ -61,6 +62,7 @@ export function ChatInputBar({
   message,
   onChangeText,
   onSend,
+  isSending,
   onImagePick,
   onFilePick,
   isUploading,
@@ -247,17 +249,17 @@ export function ChatInputBar({
               </HStack>
             </Box>
 
-            <Pressable w={40} h={40} bg={isUploading ? "#CCCCCC" : PRIMARY_COLOR}
+            <Pressable w={40} h={40} bg={isUploading || isSending ? "#CCCCCC" : PRIMARY_COLOR}
               borderRadius={20}
-              justifyContent="center" alignItems="center" 
+              justifyContent="center" alignItems="center"
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 onSend();
-              }} 
-              disabled={isUploading}
+              }}
+              disabled={isUploading || isSending}
             >
-              {isUploading ? (
-                <MaterialIcons name="hourglass-empty" size={18} color="#FFFFFF" />
+              {isUploading || isSending ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
                 <SendIcon size={18} color="#FFFFFF" />
               )}

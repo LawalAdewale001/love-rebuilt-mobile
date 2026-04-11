@@ -5,8 +5,21 @@ import { Box, HStack, Pressable, Text, VStack } from "@gluestack-ui/themed";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { MeetupBubbleIcon } from "@/components/ui/chat-icons";
-import { Linking, TouchableWithoutFeedback } from "react-native";
+import { Dimensions, Linking, TouchableWithoutFeedback } from "react-native";
+
+const SCREEN_WIDTH = Dimensions.get("window").width;
 import { VoiceNotePlayer } from "./VoiceNotePlayer";
+
+const GROUP_COLORS = [
+  "#3b82f6", "#8b5cf6", "#06b6d4", "#10b981",
+  "#f59e0b", "#ec4899", "#a855f7", "#14b8a6",
+  "#f97316", "#ef4444", "#6366f1", "#22c55e",
+];
+function getSenderColor(senderId: string): string {
+  let hash = 0;
+  for (const ch of senderId) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return GROUP_COLORS[hash % GROUP_COLORS.length];
+}
 
 interface ChatMessageBubbleProps {
   msg: ChatMessage;
@@ -15,6 +28,8 @@ interface ChatMessageBubbleProps {
   onLongPress: (msg: ChatMessage) => void;
   onImagePress: (url: string) => void;
   onReplyPress: (id: string | undefined) => void;
+  showAvatar?: boolean;
+  showSenderName?: boolean;
 }
 
 export function ChatMessageBubble({
@@ -24,7 +39,14 @@ export function ChatMessageBubble({
   onLongPress,
   onImagePress,
   onReplyPress,
+  showAvatar = false,
+  showSenderName = false,
 }: ChatMessageBubbleProps) {
+  const senderColor = isGroup && !msg.sent && msg.senderId
+    ? getSenderColor(msg.senderId)
+    : "#8b5cf6";
+  const senderInitial = msg.sender?.charAt(0).toUpperCase() ?? "?";
+
   return (
     <Pressable
       onLongPress={() => {
@@ -33,27 +55,57 @@ export function ChatMessageBubble({
       }}
       delayLongPress={300}
     >
-      <Box alignItems={msg.sent ? "flex-end" : "flex-start"} mb="$3" px="$4">
-        {/* Group sender name */}
-        {isGroup && !msg.sent && msg.sender && (
-          <HStack alignItems="center" space="xs" mb="$1" ml="$1">
-            <Box w={20} h={20} borderRadius={10} bg="#D0C4D8" justifyContent="center" alignItems="center" overflow="hidden">
-              <MaterialIcons name="person" size={12} color="#FFFFFF" />
-            </Box>
-            <Text fontSize={11} color="#999999">-{msg.sender}</Text>
-          </HStack>
+      {/* WhatsApp-style row: avatar on left for group messages from others */}
+      <HStack
+        alignItems="flex-end"
+        mb="$1"
+        px="$4"
+        justifyContent={msg.sent ? "flex-end" : "flex-start"}
+      >
+        {/* Avatar slot — always reserve width so bubbles stay aligned */}
+        {isGroup && !msg.sent && (
+          <Box w={28} h={28} mr="$1.5" mb="$0.5" flexShrink={0}>
+            {showAvatar && (
+              msg.senderAvatar ? (
+                <Image
+                  source={{ uri: msg.senderAvatar }}
+                  style={{ width: 28, height: 28, borderRadius: 14 }}
+                  contentFit="cover"
+                />
+              ) : (
+                <Box
+                  w={28} h={28} borderRadius={14}
+                  justifyContent="center" alignItems="center"
+                  style={{ backgroundColor: senderColor }}
+                >
+                  <Text fontSize={12} fontWeight="$bold" color="#FFFFFF">{senderInitial}</Text>
+                </Box>
+              )
+            )}
+          </Box>
         )}
 
-        {/* Bubble */}
-        <Box
-          maxWidth="80%"
-          bg={msg.deleted ? "transparent" : msg.sent ? PRIMARY_COLOR : "#E6E5EB"}
-          borderRadius={18}
-          borderBottomRightRadius={msg.sent ? 4 : 18}
-          borderBottomLeftRadius={msg.sent ? 18 : 4}
-          overflow="hidden"
-          {...(msg.deleted && { borderWidth: 1, borderColor: "#D0D0D0" })}
-        >
+        {/* Sender name + bubble */}
+        <VStack style={{ maxWidth: isGroup && !msg.sent ? SCREEN_WIDTH * 0.72 : SCREEN_WIDTH * 0.80 }}>
+          {showSenderName && msg.sender && (
+            <Text
+              fontSize={11}
+              fontWeight="$bold"
+              mb="$0.5"
+              ml="$1"
+              style={{ color: senderColor }}
+            >
+              {msg.sender}
+            </Text>
+          )}
+          <Box
+            bg={msg.deleted ? "transparent" : msg.sent ? PRIMARY_COLOR : "#E6E5EB"}
+            borderRadius={18}
+            borderBottomRightRadius={msg.sent ? 4 : 18}
+            borderBottomLeftRadius={msg.sent ? 18 : 4}
+            overflow="hidden"
+            {...(msg.deleted && { borderWidth: 1, borderColor: "#D0D0D0" })}
+          >
           {msg.deleted ? (
             <HStack px="$4" py="$3" alignItems="center" space="xs">
               <MaterialIcons name="block" size={14} color="#999999" />
@@ -190,8 +242,8 @@ export function ChatMessageBubble({
 
               {/* Time + Read status — always right-aligned; "edited" sits inline with the time */}
               <HStack justifyContent="flex-end" alignItems="center" px="$3" pb="$1.5" space="sm">
-                {msg.sent && msg.edited && msg.type !== MessageType.MEETUP && msg.type !== MessageType.MISSED_CALL && (
-                  <Text fontSize={10} fontStyle="italic" color="rgba(255,255,255,0.6)">edited</Text>
+                {msg.edited && msg.type !== MessageType.MEETUP && msg.type !== MessageType.MISSED_CALL && (
+                  <Text fontSize={10} fontStyle="italic" color={msg.sent ? "rgba(255,255,255,0.6)" : "#999999"}>edited</Text>
                 )}
                 <HStack alignItems="center" space="xs">
                   <Text fontSize={10} color={msg.sent ? "rgba(255,255,255,0.7)" : "#999999"}>{msg.time}</Text>
@@ -202,8 +254,9 @@ export function ChatMessageBubble({
               </HStack>
             </>
           )}
-        </Box>
-      </Box>
+          </Box>
+        </VStack>
+      </HStack>
     </Pressable>
   );
 }

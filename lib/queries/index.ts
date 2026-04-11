@@ -191,6 +191,7 @@ export type ChatMessage = {
   replyToId: string | null;
   isRead: boolean;
   isDeleted: boolean;
+  isEdited: boolean;
   meetupId: string | null;
   createdAt: string;
   updatedAt: string;
