@@ -104,6 +104,7 @@ export function ChatMessageBubble({
             borderBottomRightRadius={msg.sent ? 4 : 18}
             borderBottomLeftRadius={msg.sent ? 18 : 4}
             overflow="hidden"
+            opacity={msg.sent && msg.id.startsWith("local-") ? 0.7 : 1}
             {...(msg.deleted && { borderWidth: 1, borderColor: "#D0D0D0" })}
           >
           {msg.deleted ? (
@@ -241,17 +242,28 @@ export function ChatMessageBubble({
               )}
 
               {/* Time + Read status — always right-aligned; "edited" sits inline with the time */}
-              <HStack justifyContent="flex-end" alignItems="center" px="$3" pb="$1.5" space="sm">
-                {msg.edited && msg.type !== MessageType.MEETUP && msg.type !== MessageType.MISSED_CALL && (
-                  <Text fontSize={10} fontStyle="italic" color={msg.sent ? "rgba(255,255,255,0.6)" : "#999999"}>edited</Text>
-                )}
-                <HStack alignItems="center" space="xs">
-                  <Text fontSize={10} color={msg.sent ? "rgba(255,255,255,0.7)" : "#999999"}>{msg.time}</Text>
-                  {msg.sent && !isGroup && (
-                    <MaterialIcons name="done-all" size={12} color={msg.read ? "#53BDEB" : "rgba(255,255,255,0.5)"} />
-                  )}
-                </HStack>
-              </HStack>
+              {(() => {
+                const isPending = msg.sent && msg.id.startsWith("local-");
+                return (
+                  <HStack justifyContent="flex-end" alignItems="center" px="$3" pb="$1.5" space="sm">
+                    {!isPending && msg.edited && msg.type !== MessageType.MEETUP && msg.type !== MessageType.MISSED_CALL && (
+                      <Text fontSize={10} fontStyle="italic" color={msg.sent ? "rgba(255,255,255,0.6)" : "#999999"}>edited</Text>
+                    )}
+                    <HStack alignItems="center" space="xs">
+                      <Text fontSize={10} color={msg.sent ? "rgba(255,255,255,0.7)" : "#999999"}>
+                        {isPending ? "Sending..." : msg.time}
+                      </Text>
+                      {msg.sent && !isGroup && (
+                        isPending ? (
+                          <MaterialIcons name="access-time" size={11} color="rgba(255,255,255,0.5)" />
+                        ) : (
+                          <MaterialIcons name="done-all" size={12} color={msg.read ? "#53BDEB" : "rgba(255,255,255,0.5)"} />
+                        )
+                      )}
+                    </HStack>
+                  </HStack>
+                );
+              })()}
             </>
           )}
           </Box>

@@ -612,12 +612,14 @@ export default function ChatConversationScreen() {
   };
 
   // ── Chat actions ───────────────────────────────────────────────────────────
-  const handleSend = () => {
-    if (!message.trim() || isSending) return;
+  const handleSend = (rawText?: string) => {
+    // Use the passed text (from InputBar ref) OR fall back to React state
+    const text = (rawText ?? message).trim();
+    if (!text || isSending) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (editingMsg) {
-      emitEditMessage(editingMsg.id, message.trim());
-      setLocalMessages((prev) => prev.map((m) => m.id === editingMsg.id ? { ...m, text: message.trim(), edited: true } : m));
+      emitEditMessage(editingMsg.id, text);
+      setLocalMessages((prev) => prev.map((m) => m.id === editingMsg.id ? { ...m, text, edited: true } : m));
       setMessage(""); setEditingMsg(null); return;
     }
     setIsSending(true);
@@ -625,9 +627,11 @@ export default function ChatConversationScreen() {
     if (sendFallbackRef.current) clearTimeout(sendFallbackRef.current);
     sendFallbackRef.current = setTimeout(() => setIsSending(false), 2000);
 
-    const tempId = addOptimisticMessage({ text: message.trim(), type: MessageType.TEXT });
+    const tempId = addOptimisticMessage({ text, type: MessageType.TEXT });
+    // Scroll to latest message immediately (inverted list: offset 0 = bottom)
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
     emitSendMessage(
-      { conversationId: chatId, content: message.trim(), replyToId: replyingTo?.id, type: MessageType.TEXT },
+      { conversationId: chatId, content: text, replyToId: replyingTo?.id, type: MessageType.TEXT },
       (res) => {
         const realId = res?.id || res?.data?.id || res?.result?.id;
         if (realId) updateMessageId(tempId, realId);
@@ -769,6 +773,15 @@ export default function ChatConversationScreen() {
             isMember={isMember}
             chatId={chatId}
           />
+
+          {/* Full-screen tap-away to close options dropdown */}
+          {showOptions && (
+            <Box
+              position="absolute" top={0} left={0} right={0} bottom={0}
+              zIndex={98}
+              onTouchEnd={() => setShowOptions(false)}
+            />
+          )}
 
           {/* Upload Status Overlay */}
           {isUploading && (

@@ -4,7 +4,7 @@ import type { ChatMessage } from "@/types/chat.types";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Box, HStack, Pressable, ScrollView, Text } from "@gluestack-ui/themed";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, PanResponder, PanResponderInstance, TextInput } from "react-native";
+import { Animated, NativeSyntheticEvent, PanResponder, PanResponderInstance, TextInput, TextInputChangeEventData } from "react-native";
 import * as Haptics from "expo-haptics";
 import { ActivityIndicator } from "react-native";
 
@@ -20,7 +20,7 @@ interface ChatInputBarProps {
   // Text input
   message: string;
   onChangeText: (text: string) => void;
-  onSend: () => void;
+  onSend: (text: string) => void;
   isSending: boolean;
   // Media
   onImagePick: () => void;
@@ -96,6 +96,16 @@ export function ChatInputBar({
 }: ChatInputBarProps) {
   const formatTime = (secs: number) =>
     `${Math.floor(secs / 60).toString().padStart(2, "0")}:${(secs % 60).toString().padStart(2, "0")}`;
+
+  // Ref to read the fully-committed TextInput value on Android (avoids IME truncation)
+  const textInputRef = useRef<TextInput>(null);
+  const currentTextRef = useRef(message);
+
+  // Local sending flag — flips immediately on press without waiting for parent re-render
+  const [localSending, setLocalSending] = useState(false);
+  useEffect(() => {
+    if (!isSending) setLocalSending(false);
+  }, [isSending]);
 
   const swipeX = useRef(new Animated.Value(0)).current;
   const [isCancelled, setIsCancelled] = useState(false);
@@ -225,11 +235,15 @@ export function ChatInputBar({
             >
               <HStack alignItems="flex-end">
                 <TextInput
+                  ref={textInputRef}
                   placeholder="Message..."
                   placeholderTextColor="#999999"
                   style={{ fontSize: 14, color: "#1A1A1A", flex: 1, paddingHorizontal: 16, paddingVertical: 8, maxHeight: 90 }}
                   value={message}
-                  onChangeText={onChangeText}
+                  onChangeText={(text) => {
+                    currentTextRef.current = text;
+                    onChangeText(text);
+                  }}
                   editable={!isUploading}
                   multiline
                   blurOnSubmit={false}
@@ -249,16 +263,18 @@ export function ChatInputBar({
               </HStack>
             </Box>
 
-            <Pressable w={40} h={40} bg={isUploading || isSending ? "#CCCCCC" : PRIMARY_COLOR}
+            <Pressable w={40} h={40} bg={isUploading || localSending ? "#CCCCCC" : PRIMARY_COLOR}
               borderRadius={20}
               justifyContent="center" alignItems="center"
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                onSend();
+                // Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                if (!currentTextRef.current.trim()) return;
+                setLocalSending(true); // instant visual feedback — no round-trip to parent
+                onSend(currentTextRef.current);
               }}
-              disabled={isUploading || isSending}
+              disabled={isUploading || localSending}
             >
-              {isUploading || isSending ? (
+              {isUploading || localSending ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
                 <SendIcon size={18} color="#FFFFFF" />
@@ -271,9 +287,9 @@ export function ChatInputBar({
         {!isMember && isGroup && (
           <Box px="$4" py="$3" alignItems="center" justifyContent="center">
             <Box bg="#F5F5F5" px="$6" py="$3" borderRadius={12} w="100%" alignItems="center" justifyContent="center">
-               <Text fontSize={14} color="#666666" textAlign="center" fontWeight="$medium">
-                 Join this group to participate in the conversation.
-               </Text>
+              <Text fontSize={14} color="#666666" textAlign="center" fontWeight="$medium">
+                Join this group to participate in the conversation.
+              </Text>
             </Box>
           </Box>
         )}
@@ -297,8 +313,8 @@ export function ChatInputBar({
                 <ActivityIndicator size="small" color={PRIMARY_COLOR} />
               ) : (
                 <Text fontSize={14} color="#666666" textAlign="center">
-                  {isBlocked 
-                    ? "You blocked this contact. Tap to unblock." 
+                  {isBlocked
+                    ? "You blocked this contact. Tap to unblock."
                     : "You cannot message this contact."}
                 </Text>
               )}
@@ -347,11 +363,11 @@ export function ChatInputBar({
         {/* ── Post-recording Playback ── */}
         {!isRecording && recordedUri && (
           <HStack px="$4" py="$2" alignItems="center" space="sm" minHeight={56}>
-            <Pressable w={36} h={36} justifyContent="center" alignItems="center" 
+            <Pressable w={36} h={36} justifyContent="center" alignItems="center"
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 onCancelVoiceNote();
-              }} 
+              }}
               disabled={isUploading}
             >
               <MaterialIcons name="delete" size={22} color={isUploading ? "#CCCCCC" : "#E53935"} />
@@ -382,7 +398,7 @@ export function ChatInputBar({
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 onSendVoiceNote();
-              }} 
+              }}
               disabled={isUploading}
             >
               {isUploading
