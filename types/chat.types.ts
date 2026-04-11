@@ -7,6 +7,7 @@ export enum MessageType {
   AUDIO = 'audio',
   FILE = 'file',
   MEETUP = 'meetup',
+  MISSED_CALL = 'missed_call',
 }
 
 export type ChatMessage = {

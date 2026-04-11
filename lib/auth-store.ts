@@ -8,6 +8,7 @@ export type AuthUser = {
   email: string;
   fullName: string;
   isVerified: boolean;
+  avatar?: string; // Profile photo URL — stored on login/register so it can be sent in call invites
 };
 
 let cachedToken: string | null = null;

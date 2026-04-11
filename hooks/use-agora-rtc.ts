@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { Audio } from 'expo-av';
 import createAgoraRtcEngine, {
   ChannelProfileType,
   ClientRoleType,
@@ -145,6 +146,15 @@ export function useAgoraRTC({ channelName, token, uid, isVideo, onTokenError }: 
     } catch (e) {
       console.error('[Agora] Leave failed:', e);
     }
+
+    // Reset iOS/Android audio session so the microphone is fully released
+    Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+      playsInSilentModeIOS: false,
+      shouldDuckAndroid: false,
+      staysActiveInBackground: false,
+      playThroughEarpieceAndroid: false,
+    }).catch(() => {});
   }, []);
 
   const toggleMute = useCallback(() => {

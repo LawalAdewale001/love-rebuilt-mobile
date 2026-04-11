@@ -28,6 +28,7 @@ To ensure the app correctly connects to the local development server when using 
 1. **Network Connectivity**: Ensure both the PC and the phone are on the same network.
    - Recommended: Hotspot your phone and connect the PC to that hotspot.
 2. **Physical Connection**: Connect your phone to the PC via a USB cable.
+2b. **Enable USB Debugging**: Enable USB debugging on your Android device.
 3. **Port Forwarding**: Run the following command to route the traffic correctly:
    ```bash
    adb reverse tcp:8081 tcp:8081
@@ -36,6 +37,13 @@ To ensure the app correctly connects to the local development server when using 
    ```bash
    npx expo start --dev-client
    ```
+5. **Using in an emulator/simulator like Nox Player, Bluestack etc**:
+   ```bash
+   ipconfig
+   ```
+   - Make sure you are using the ip address of your PC
+     `[IP_ADDRESS]:[PORT]`
+      11.222.89.56:8081
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 

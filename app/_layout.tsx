@@ -15,7 +15,7 @@ import {
   ThemeProvider,
 } from "@react-navigation/native";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { Redirect, Stack } from "expo-router";
+import { Redirect, Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
@@ -27,7 +27,64 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import "@/lib/api-client-interceptors"; // Registers axios interceptors for protected routes
 import { getAccessToken, loadAuth } from "@/lib/auth-store";
 import { queryClient } from "@/lib/query-client";
-import { connectSocket } from "@/lib/socket";
+import { connectSocket, getSocket } from "@/lib/socket";
+
+/**
+ * Listens globally for incoming call invitations and navigates to the
+ * incoming-call screen. Mounted once for the entire authenticated session.
+ */
+function useIncomingCallSocket() {
+  const router = useRouter();
+
+  useEffect((): (() => void) => {
+    let cleanup: (() => void) = () => {};
+    let intervalId: ReturnType<typeof setInterval>;
+
+    const register = (socket: ReturnType<typeof getSocket>) => {
+      if (!socket) return;
+
+      const onInvited = (data: {
+        callerId: string;
+        channelName: string;
+        isVideo: boolean;
+        info?: { callerName?: string; callerAvatar?: string };
+      }) => {
+        router.push({
+          pathname: "/incoming-call",
+          params: {
+            callerName: data.info?.callerName || "Unknown",
+            callerAvatar: data.info?.callerAvatar || "",
+            callerId: data.callerId,
+            channelName: data.channelName,
+            isVideo: data.isVideo ? "true" : "false",
+          },
+        });
+      };
+
+      socket.on("call:invited", onInvited);
+      cleanup = () => { socket.off("call:invited", onInvited); };
+    };
+
+    const socket = getSocket();
+    if (socket) {
+      register(socket);
+    } else {
+      // Socket may not be ready yet — poll until it is
+      intervalId = setInterval(() => {
+        const s = getSocket();
+        if (s) {
+          clearInterval(intervalId);
+          register(s);
+        }
+      }, 500);
+    }
+
+    return () => {
+      clearInterval(intervalId);
+      cleanup();
+    };
+  }, []);
+}
 
 SplashScreen.preventAutoHideAsync();
 
@@ -47,6 +104,9 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     });
   }, []);
+
+  // Global incoming call listener (active for the whole authenticated session)
+  useIncomingCallSocket();
 
   if (authState === "loading") return null;
 
@@ -104,6 +164,10 @@ export default function RootLayout() {
               <Stack.Screen
                 name="call-screen"
                 options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="incoming-call"
+                options={{ headerShown: false, animation: "slide_from_bottom" }}
               />
             </Stack>
             <StatusBar style="auto" />

@@ -130,45 +130,67 @@ export function ChatMessageBubble({
               )}
 
               {/* Meetup */}
-              {msg.type === MessageType.MEETUP && msg.meetup && (
-                <Box bg="#E86A7A" borderRadius={18} overflow="hidden" flexDirection="row">
-                  <Box w={6} bg="#B73041" opacity={0.6} />
-                  <HStack px="$4" py="$4" space="md" alignItems="center" flex={1}>
-                    <Box bg="rgba(255,255,255,0.15)" p="$1.5" borderRadius={10} alignItems="center" justifyContent="center">
-                      <MeetupBubbleIcon size={34} color="white" />
-                    </Box>
-                    <VStack flex={1}>
-                      <Text fontSize={16} fontWeight="$bold" color="#FFFFFF" numberOfLines={1}>
-                        {msg.meetup.title}
-                      </Text>
-                      <Text fontSize={13} color="#FFFFFF" mt="$1" opacity={0.9}>
-                        {(() => {
-                          const date = new Date(msg.meetup.date);
-                          const day = date.getDate();
-                          const month = date.toLocaleDateString("en-GB", { month: "short" });
-                          const year = date.getFullYear();
-                          const suffix = ["th", "st", "nd", "rd"][(day % 10 > 3 || Math.floor((day % 100) / 10) === 1) ? 0 : day % 10];
-                          return `${day}${suffix} ${month}. ${year}`;
-                        })()} • {msg.meetup.time.toLowerCase()}
-                      </Text>
-                      <Text fontSize={13} color="#FFFFFF" mt="$1" opacity={0.8} numberOfLines={1}>
-                        {msg.meetup.location}
-                      </Text>
-                    </VStack>
-                  </HStack>
-                </Box>
+              {msg.type === MessageType.MEETUP && msg.meetup && (() => {
+                // Sent = coral brand colors; Received = gray/neutral so it reads like a normal received bubble
+                const meetupBg = msg.sent ? "#E86A7A" : "#D4C8D8";
+                const accentBar = msg.sent ? "#B73041" : "#8B6B8F";
+                const textColor = msg.sent ? "#FFFFFF" : "#1A1A1A";
+                const subTextColor = msg.sent ? "rgba(255,255,255,0.85)" : "#555555";
+                const iconBg = msg.sent ? "rgba(255,255,255,0.15)" : "rgba(90,42,84,0.12)";
+                return (
+                  <Box bg={meetupBg} borderRadius={18} overflow="hidden" flexDirection="row">
+                    <Box w={6} bg={accentBar} opacity={0.6} />
+                    <HStack px="$4" py="$4" space="md" alignItems="center" flex={1}>
+                      <Box bg={iconBg} p="$1.5" borderRadius={10} alignItems="center" justifyContent="center">
+                        <MeetupBubbleIcon size={34} color={msg.sent ? "white" : "#5A2A54"} />
+                      </Box>
+                      <VStack flex={1}>
+                        <Text fontSize={16} fontWeight="$bold" color={textColor} numberOfLines={1}>
+                          {msg.meetup.title}
+                        </Text>
+                        <Text fontSize={13} color={subTextColor} mt="$1">
+                          {(() => {
+                            const date = new Date(msg.meetup.date);
+                            const day = date.getDate();
+                            const month = date.toLocaleDateString("en-GB", { month: "short" });
+                            const year = date.getFullYear();
+                            const suffix = ["th", "st", "nd", "rd"][(day % 10 > 3 || Math.floor((day % 100) / 10) === 1) ? 0 : day % 10];
+                            return `${day}${suffix} ${month}. ${year}`;
+                          })()} • {msg.meetup.time.toLowerCase()}
+                        </Text>
+                        <Text fontSize={13} color={subTextColor} mt="$1" numberOfLines={1}>
+                          {msg.meetup.location}
+                        </Text>
+                      </VStack>
+                    </HStack>
+                  </Box>
+                );
+              })()}
+
+              {/* Missed Call */}
+              {msg.type === MessageType.MISSED_CALL && (
+                <HStack px="$4" py="$3" alignItems="center" space="sm">
+                  <MaterialIcons
+                    name="call-missed"
+                    size={18}
+                    color={msg.sent ? "rgba(255,255,255,0.9)" : "#FF3B30"}
+                  />
+                  <Text fontSize={14} color={msg.sent ? "rgba(255,255,255,0.9)" : "#1A1A1A"} fontStyle="italic">
+                    {msg.text || "Missed call"}
+                  </Text>
+                </HStack>
               )}
 
               {/* Text */}
-              {msg.text && (
+              {msg.text && msg.type !== MessageType.MISSED_CALL && (
                 <Box px="$4" py="$2.5">
                   <Text fontSize={15} color={msg.sent ? "#FFFFFF" : "#1A1A1A"}>{msg.text}</Text>
                 </Box>
               )}
 
-              {/* Time + Read status */}
-              <HStack justifyContent={msg.edited ? "space-between" : "flex-end"} alignItems="center" px="$3" pb="$1.5">
-                {msg.edited && (
+              {/* Time + Read status — always right-aligned; "edited" sits inline with the time */}
+              <HStack justifyContent="flex-end" alignItems="center" px="$3" pb="$1.5" space="sm">
+                {msg.edited && msg.type !== MessageType.MEETUP && msg.type !== MessageType.MISSED_CALL && (
                   <Text fontSize={10} fontStyle="italic" color={msg.sent ? "rgba(255,255,255,0.6)" : "#999999"}>edited</Text>
                 )}
                 <HStack alignItems="center" space="xs">

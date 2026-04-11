@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { getSocket } from "@/lib/socket";
+import { getSocket, emitMarkAsRead } from "@/lib/socket";
 import { queryKeys, type ChatMessage } from "@/lib/queries";
 import { getAuthUser } from "@/lib/auth-store";
 
@@ -35,6 +35,20 @@ export function useChatSocket(conversationId: string) {
       });
       // Also invalidate chat list to update last message
       queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
+      // If the message is from someone else, mark it as read immediately
+      // (the user is actively viewing this conversation)
+      if (message.senderId !== currentUserId) {
+        emitMarkAsRead(conversationId);
+      }
+    };
+
+    // ─── Messages read by the other person
+    const onMessagesRead = (data: { conversationId: string; userId: string }) => {
+      if (data.conversationId !== conversationId) return;
+      // Refresh messages so sent bubbles update to "read" (double-tick)
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.messages(conversationId),
+      });
     };
 
     // ─── Typing indicator
@@ -89,6 +103,7 @@ export function useChatSocket(conversationId: string) {
     };
 
     socket.on("newMessage", onNewMessage);
+    socket.on("messagesRead", onMessagesRead);
     socket.on("isTyping", onTyping);
     socket.on("messageEdited", onMessageEdited);
     socket.on("messageDeleted", onMessageDeleted);
@@ -96,6 +111,7 @@ export function useChatSocket(conversationId: string) {
 
     return () => {
       socket.off("newMessage", onNewMessage);
+      socket.off("messagesRead", onMessagesRead);
       socket.off("isTyping", onTyping);
       socket.off("messageEdited", onMessageEdited);
       socket.off("messageDeleted", onMessageDeleted);

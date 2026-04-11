@@ -34,7 +34,8 @@ import { useChatSocket } from "@/hooks/use-chat-socket";
 import { useS3Upload } from "@/hooks/use-s3-upload";
 import { getAuthUser } from "@/lib/auth-store";
 import { queryKeys, useMessagesQuery, type ChatMessage as ApiChatMessage, type ChatConversation, type ChatMember, useBlockMutation, useReportMutation, useConversationQuery, useUnblockMutation, useChatListQuery, useJoinGroupMutation, useLeaveGroupMutation, useCreateMeetupMutation, useChatProgressMutation } from "@/lib/queries";
-import { emitDeleteMessage, emitEditMessage, emitSendMessage, emitTyping } from "@/lib/socket";
+import { emitDeleteMessage, emitEditMessage, emitSendMessage, emitTyping, emitMarkAsRead } from "@/lib/socket";
+import { setActiveConversation } from "@/lib/active-conversation";
 
 import { MessageType, type ChatListItem, type ChatMessage, type SheetType } from "@/types/chat.types";
 
@@ -149,8 +150,12 @@ export default function ChatConversationScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      setActiveConversation(chatId);
       refetch();
-    }, [refetch])
+      // Mark all messages as read as soon as the user enters the conversation
+      emitMarkAsRead(chatId);
+      return () => setActiveConversation(null); // Clear when leaving the screen
+    }, [refetch, chatId])
   );
 
   const apiMessages: ChatMessage[] = useMemo(() => {

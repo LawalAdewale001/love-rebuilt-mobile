@@ -217,7 +217,17 @@ export function ChatHeader({
               onPress={() => {
                 setShowOptions(false);
                 if (option.callType) {
-                  router.push({ pathname: "/call-screen", params: { name, type: option.callType, chatId, avatar } });
+                  router.push({
+                    pathname: "/call-screen",
+                    params: {
+                      name,
+                      type: option.callType,
+                      chatId,
+                      avatar,
+                      mode: "outgoing",
+                      recipientId: recipientIdParam,
+                    },
+                  });
                 } else if (option.label === "Block" || option.label === "Unblock") {
                   if (isBlocked) {
                     onUnblock();

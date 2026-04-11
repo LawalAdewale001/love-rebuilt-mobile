@@ -81,3 +81,30 @@ export function emitEditMessage(messageId: string, content: string) {
 export function emitDeleteMessage(messageId: string, mode: "everyone" | "me") {
   socket?.emit("deleteMessage", { messageId, mode });
 }
+
+export function emitMarkAsRead(conversationId: string) {
+  socket?.emit("markAsRead", { conversationId });
+}
+
+// ─── Call signaling
+
+export function emitCallInvite(data: {
+  receiverId: string;
+  channelName: string;
+  isVideo: boolean;
+  info?: { callerName: string; callerAvatar?: string };
+}) {
+  socket?.emit("call:invite", data);
+}
+
+export function emitCallAccept(callerId: string, channelName: string) {
+  socket?.emit("call:accept", { callerId, channelName });
+}
+
+export function emitCallReject(callerId: string) {
+  socket?.emit("call:reject", { callerId, reason: "declined" });
+}
+
+export function emitCallHangup(otherUserId: string, channelName: string) {
+  socket?.emit("call:hangup", { otherUserId, channelName });
+}
