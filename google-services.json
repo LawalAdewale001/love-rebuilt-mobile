@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "631844562073",
+    "project_id": "loverebuilt-d2c89",
+    "storage_bucket": "loverebuilt-d2c89.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:631844562073:android:e42cb0d7d4dbf7acc14408",
+        "android_client_info": {
+          "package_name": "com.loverebuilt"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAPWAS_TX0zEatvlykiSu9hKLuTdVsyCX4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

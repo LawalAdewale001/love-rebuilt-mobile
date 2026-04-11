@@ -97,11 +97,13 @@ export function useAgoraRTC({ channelName, token, uid, isVideo, onTokenError }: 
         },
       });
 
+      // Audio must be enabled for all call types (including video)
+      engine.current.enableAudio();
+
       if (isVideo) {
         engine.current.enableVideo();
+        engine.current.enableLocalVideo(true);
         engine.current.startPreview();
-      } else {
-        engine.current.enableAudio();
       }
 
       engine.current.setEnableSpeakerphone(isSpeakerOn);

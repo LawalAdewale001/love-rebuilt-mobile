@@ -190,8 +190,8 @@ export function ChatMessageBubble({
 
               {/* Time + Read status — always right-aligned; "edited" sits inline with the time */}
               <HStack justifyContent="flex-end" alignItems="center" px="$3" pb="$1.5" space="sm">
-                {msg.edited && msg.type !== MessageType.MEETUP && msg.type !== MessageType.MISSED_CALL && (
-                  <Text fontSize={10} fontStyle="italic" color={msg.sent ? "rgba(255,255,255,0.6)" : "#999999"}>edited</Text>
+                {msg.sent && msg.edited && msg.type !== MessageType.MEETUP && msg.type !== MessageType.MISSED_CALL && (
+                  <Text fontSize={10} fontStyle="italic" color="rgba(255,255,255,0.6)">edited</Text>
                 )}
                 <HStack alignItems="center" space="xs">
                   <Text fontSize={10} color={msg.sent ? "rgba(255,255,255,0.7)" : "#999999"}>{msg.time}</Text>

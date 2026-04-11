@@ -374,6 +374,12 @@ export default function ChatsScreen() {
                       {chat.lastMessage.type === MessageType.VIDEO && (
                         <MaterialIcons name="videocam" size={14} color="#999999" />
                       )}
+                      {chat.lastMessage.type === MessageType.MEETUP && (
+                        <MaterialIcons name="event" size={14} color="#999999" />
+                      )}
+                      {chat.lastMessage.type === MessageType.MISSED_CALL && (
+                        <MaterialIcons name="call-missed" size={14} color="#FF3B30" />
+                      )}
                     </>
                   )}
                   <Text fontSize={13} color="#999999" numberOfLines={1} flex={1}>
@@ -383,9 +389,17 @@ export default function ChatsScreen() {
                         ? chat.lastMessage.content
                         : chat.lastMessage.type === MessageType.AUDIO
                           ? "Voice note"
-                          : chat.lastMessage.type === MessageType.FILE
-                            ? "Document"
-                            : chat.lastMessage.type.charAt(0).toUpperCase() + chat.lastMessage.type.slice(1)}
+                          : chat.lastMessage.type === MessageType.IMAGE
+                            ? "Photo"
+                            : chat.lastMessage.type === MessageType.VIDEO
+                              ? "Video"
+                              : chat.lastMessage.type === MessageType.FILE
+                                ? "Document"
+                                : chat.lastMessage.type === MessageType.MEETUP
+                                  ? "Meetup planned"
+                                  : chat.lastMessage.type === MessageType.MISSED_CALL
+                                    ? "Missed call"
+                                    : chat.lastMessage.content}
                   </Text>
                 </HStack>
               ) : (

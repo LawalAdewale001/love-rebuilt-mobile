@@ -24,10 +24,10 @@ import { Box, HStack, Pressable, Text, VStack } from "@gluestack-ui/themed";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Animated, Dimensions, StatusBar, ActivityIndicator, Alert } from "react-native";
+import { Animated, Dimensions, StatusBar, ActivityIndicator, Alert, PermissionsAndroid, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { RtcSurfaceView } from "react-native-agora";
-import { useCallTokenQuery, useProfileQuery } from "@/lib/queries";
+import { RtcSurfaceView, RenderModeType } from "react-native-agora";
+import { useCallTokenQuery } from "@/lib/queries";
 import { useAgoraRTC } from "@/hooks/use-agora-rtc";
 import { Audio } from "expo-av";
 import { getSocket, emitCallInvite, emitCallHangup } from "@/lib/socket";
@@ -76,9 +76,7 @@ export default function CallScreen() {
 
   const callerImage = avatar || CALLER_PLACEHOLDER;
   const currentUser = getAuthUser();
-  const { data: myProfile } = useProfileQuery();
-  // Profile query has the most up-to-date avatar; fall back to auth store then empty
-  const myAvatar = myProfile?.avatar || currentUser?.avatar || "";
+
 
   // ── Phase ────────────────────────────────────────────────────────────────────
   const [phase, setPhase] = useState<CallPhase>("calling");
@@ -90,12 +88,31 @@ export default function CallScreen() {
   // ── Permissions ──────────────────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== "granted") {
+      // Microphone (both voice and video calls)
+      const { status: micStatus } = await Audio.requestPermissionsAsync();
+      if (micStatus !== "granted") {
         Alert.alert("Permission needed", "Microphone permission is required for calls.");
         router.back();
         return;
       }
+
+      // Camera (video calls only, Android requires an explicit runtime request)
+      if (isVideo && Platform.OS === "android") {
+        const cameraStatus = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.CAMERA,
+          {
+            title: "Camera permission",
+            message: "Camera access is needed for video calls.",
+            buttonPositive: "Allow",
+          }
+        );
+        if (cameraStatus !== PermissionsAndroid.RESULTS.GRANTED) {
+          Alert.alert("Permission needed", "Camera permission is required for video calls.");
+          router.back();
+          return;
+        }
+      }
+
       try {
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: true,
@@ -180,7 +197,6 @@ export default function CallScreen() {
 
   // ── Outgoing ringtone + call invite ─────────────────────────────────────────
   const ringtoneRef = useRef<Audio.Sound | null>(null);
-  const inviteSentRef = useRef(false);
 
   const stopRingtone = useCallback(async () => {
     if (ringtoneRef.current) {
@@ -192,6 +208,24 @@ export default function CallScreen() {
     }
   }, []);
 
+  // Send invite IMMEDIATELY on mount — chatId and recipientId are available
+  // from route params right away. Do NOT wait for the Agora token; if the
+  // token fetch is slow or fails the receiver would never get the call.
+  useEffect(() => {
+    if (!isOutgoing || !recipientId) return;
+    emitCallInvite({
+      receiverId: recipientId,
+      channelName: chatId,
+      isVideo,
+      info: {
+        callerName: currentUser?.fullName || "Someone",
+        callerAvatar: currentUser?.avatar || "",
+      },
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally runs once on mount only
+
+  // Ringtone + 60 s timeout (outgoing only)
   useEffect(() => {
     if (!isOutgoing) return;
     let active = true;
@@ -210,20 +244,6 @@ export default function CallScreen() {
       }
     };
 
-    // Emit invite once the token is ready (invite includes channelName for Agora)
-    if (callData?.token && recipientId && !inviteSentRef.current) {
-      inviteSentRef.current = true;
-      emitCallInvite({
-        receiverId: recipientId,
-        channelName: chatId,
-        isVideo,
-        info: {
-          callerName: myProfile?.fullName || currentUser?.fullName || "Someone",
-          callerAvatar: myAvatar,
-        },
-      });
-    }
-
     if (phase === "calling") {
       startRing();
       timeoutId = setTimeout(() => {
@@ -239,7 +259,7 @@ export default function CallScreen() {
       clearTimeout(timeoutId);
       stopRingtone();
     };
-  }, [isOutgoing, phase, callData?.token, recipientId, myAvatar, myProfile?.fullName]);
+  }, [isOutgoing, phase]);
 
   // ── Socket listeners (outgoing: accepted / rejected / hung up) ───────────────
   useEffect(() => {
@@ -375,7 +395,7 @@ export default function CallScreen() {
 
         {remoteUsers.length > 0 ? (
           <RtcSurfaceView
-            canvas={{ uid: remoteUsers[0] }}
+            canvas={{ uid: remoteUsers[0], renderMode: RenderModeType.RenderModeHidden }}
             style={{ position: "absolute", width: SCREEN_WIDTH, height: SCREEN_HEIGHT }}
           />
         ) : (
@@ -407,7 +427,7 @@ export default function CallScreen() {
                   width: 100, height: 140, backgroundColor: "#333",
                 }}
               >
-                <RtcSurfaceView canvas={{ uid: 0 }} style={{ width: "100%", height: "100%" }} />
+                <RtcSurfaceView canvas={{ uid: 0, renderMode: RenderModeType.RenderModeHidden }} style={{ width: "100%", height: "100%" }} />
               </Animated.View>
             )}
 

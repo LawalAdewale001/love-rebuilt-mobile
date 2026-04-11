@@ -16,7 +16,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef } from "react";
 import { Animated, StatusBar } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { emitCallAccept, emitCallReject } from "@/lib/socket";
+import { emitCallAccept, emitCallReject, getSocket } from "@/lib/socket";
 
 // Incoming ringtone — same file used on both caller and receiver sides
 const RINGTONE = require("@/assets/audio/ringtone.mp3");
@@ -114,6 +114,32 @@ export default function IncomingCallScreen() {
       } catch {}
     }
   }, []);
+
+  // ── Auto-reject + caller-hangup listener ─────────────────────────────────────
+  // If the caller hangs up before we answer, or we never answer within 40 s,
+  // stop the ringtone and leave the screen automatically.
+  useEffect(() => {
+    // 40-second auto-reject timeout (caller's side also times out at ~60 s)
+    const timeoutId = setTimeout(async () => {
+      await stopRingtone();
+      router.back();
+    }, 40_000);
+
+    // Listen for the caller hanging up before we answer
+    const socket = getSocket();
+    const onCallerHungUp = (data: { channelName?: string }) => {
+      // Only act if this is for our specific call channel
+      if (data?.channelName && data.channelName !== channelName) return;
+      clearTimeout(timeoutId);
+      stopRingtone().then(() => router.back());
+    };
+    socket?.on("call:hanged-up", onCallerHungUp);
+
+    return () => {
+      clearTimeout(timeoutId);
+      socket?.off("call:hanged-up", onCallerHungUp);
+    };
+  }, [channelName, stopRingtone]);
 
   // ── Accept ───────────────────────────────────────────────────────────────────
   const handleAccept = useCallback(async () => {

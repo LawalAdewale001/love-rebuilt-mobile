@@ -45,6 +45,14 @@ To ensure the app correctly connects to the local development server when using 
      `[IP_ADDRESS]:[PORT]`
       11.222.89.56:8081
 
+### ✅ Bundling .apk and .abb
+````bash
+eas build --platform android --profile development
+eas build --platform all --profile development
+eas build --platform ios --profile development
+```
+
+
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
 ## Get a fresh project

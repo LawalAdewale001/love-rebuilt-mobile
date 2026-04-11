@@ -20,7 +20,7 @@ import { KeyboardAvoidingView, Platform, ScrollView } from "react-native";
 
 import { showToast } from "@/components/ui/toast";
 import { useForm } from "@/hooks/use-form";
-import { ApiError } from "@/lib/api-client";
+import { ApiError, apiClient } from "@/lib/api-client";
 import { useLoginMutation } from "@/lib/queries";
 import { registerForPushNotifications } from "@/lib/push-notifications";
 import { connectSocket } from "@/lib/socket";
@@ -57,7 +57,7 @@ export default function SignInScreen() {
   const emailError = form.getError("email");
   const passwordError = form.getError("password");
 
-  const handleSignIn = async () => {
+  const handleSignIn = () => {
     const validated = form.validate();
     if (!validated) {
       const firstError = form.fieldErrors.email ?? form.fieldErrors.password;
@@ -65,19 +65,23 @@ export default function SignInScreen() {
       return;
     }
 
-    // Get push token before login so we can send it with credentials
-    const pushToken = await registerForPushNotifications();
+    // Kick off push registration in the background — don't block the login request
+    const pushTokenPromise = registerForPushNotifications();
 
     loginMutation.mutate(
-      {
-        email: validated.email,
-        password: validated.password,
-        devicePushToken: pushToken ?? undefined,
-      },
+      { email: validated.email, password: validated.password },
       {
         onSuccess: () => {
           connectSocket();
           router.replace("/(tabs)");
+          // Update the push token silently after navigation (fire-and-forget)
+          pushTokenPromise.then((token) => {
+            if (token) {
+              apiClient
+                .patch("/api/user/update", { devicePushToken: token })
+                .catch(() => {}); // Non-critical, ignore failures
+            }
+          });
         },
         onError: (error) => {
           const message =
