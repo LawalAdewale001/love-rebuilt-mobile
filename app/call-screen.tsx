@@ -27,7 +27,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Animated, Dimensions, StatusBar, ActivityIndicator, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { RtcSurfaceView } from "react-native-agora";
-import { useCallTokenQuery } from "@/lib/queries";
+import { useCallTokenQuery, useProfileQuery } from "@/lib/queries";
 import { useAgoraRTC } from "@/hooks/use-agora-rtc";
 import { Audio } from "expo-av";
 import { getSocket, emitCallInvite, emitCallHangup } from "@/lib/socket";
@@ -76,6 +76,9 @@ export default function CallScreen() {
 
   const callerImage = avatar || CALLER_PLACEHOLDER;
   const currentUser = getAuthUser();
+  const { data: myProfile } = useProfileQuery();
+  // Profile query has the most up-to-date avatar; fall back to auth store then empty
+  const myAvatar = myProfile?.avatar || currentUser?.avatar || "";
 
   // ── Phase ────────────────────────────────────────────────────────────────────
   const [phase, setPhase] = useState<CallPhase>("calling");
@@ -168,15 +171,7 @@ export default function CallScreen() {
     if (otherUserId && chatId) {
       emitCallHangup(otherUserId, chatId);
     }
-    leave();
-    // Ensure audio mode is fully reset so the mic stops immediately
-    Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      playsInSilentModeIOS: false,
-      shouldDuckAndroid: false,
-      staysActiveInBackground: false,
-      playThroughEarpieceAndroid: false,
-    }).catch(() => { });
+    leave(); // Mutes, leaves channel, releases engine, resets audio mode
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 0, duration: 250, useNativeDriver: true }),
       Animated.timing(scaleAnim, { toValue: 0.8, duration: 250, useNativeDriver: true }),
@@ -223,8 +218,8 @@ export default function CallScreen() {
         channelName: chatId,
         isVideo,
         info: {
-          callerName: currentUser?.fullName || "Someone",
-          callerAvatar: currentUser?.avatar || "",
+          callerName: myProfile?.fullName || currentUser?.fullName || "Someone",
+          callerAvatar: myAvatar,
         },
       });
     }
@@ -244,7 +239,7 @@ export default function CallScreen() {
       clearTimeout(timeoutId);
       stopRingtone();
     };
-  }, [isOutgoing, phase, callData?.token, recipientId]);
+  }, [isOutgoing, phase, callData?.token, recipientId, myAvatar, myProfile?.fullName]);
 
   // ── Socket listeners (outgoing: accepted / rejected / hung up) ───────────────
   useEffect(() => {
