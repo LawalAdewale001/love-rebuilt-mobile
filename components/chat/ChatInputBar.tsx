@@ -4,7 +4,7 @@ import type { ChatMessage } from "@/types/chat.types";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Box, HStack, Pressable, ScrollView, Text } from "@gluestack-ui/themed";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, NativeSyntheticEvent, PanResponder, PanResponderInstance, TextInput, TextInputChangeEventData } from "react-native";
+import { Animated, Easing, PanResponder, PanResponderInstance, TextInput } from "react-native";
 import * as Haptics from "expo-haptics";
 import { ActivityIndicator } from "react-native";
 
@@ -26,8 +26,10 @@ interface ChatInputBarProps {
   onImagePick: () => void;
   onFilePick: () => void;
   isUploading: boolean;
+  uploadProgress?: number; // 0-100
   // Recording
   isRecording: boolean;
+  isStoppingRecording?: boolean;
   recordedUri: string | null;
   recordingSeconds: number;
   isPlayingBack: boolean;
@@ -66,7 +68,9 @@ export function ChatInputBar({
   onImagePick,
   onFilePick,
   isUploading,
+  uploadProgress = 0,
   isRecording,
+  isStoppingRecording = false,
   recordedUri,
   recordingSeconds,
   isPlayingBack,
@@ -109,6 +113,83 @@ export function ChatInputBar({
 
   const swipeX = useRef(new Animated.Value(0)).current;
   const [isCancelled, setIsCancelled] = useState(false);
+
+  // ── Send / upload animations ───────────────────────────────────────────────
+  const sendScaleAnim = useRef(new Animated.Value(1)).current;
+  const voiceSendScaleAnim = useRef(new Animated.Value(1)).current;
+  const uploadSpinAnim = useRef(new Animated.Value(0)).current;
+  const uploadProgressAnim = useRef(new Animated.Value(0)).current;
+  const playbackEntryAnim = useRef(new Animated.Value(0)).current;
+  const stoppingPulseAnim = useRef(new Animated.Value(0.4)).current;
+
+  // Pulsing opacity while recording is finalising
+  useEffect(() => {
+    if (isStoppingRecording) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(stoppingPulseAnim, { toValue: 1, duration: 400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(stoppingPulseAnim, { toValue: 0.4, duration: 400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ])
+      ).start();
+    } else {
+      stoppingPulseAnim.stopAnimation();
+      stoppingPulseAnim.setValue(0.4);
+    }
+  }, [isStoppingRecording]);
+
+  // Spinning hourglass during upload
+  useEffect(() => {
+    if (isUploading) {
+      uploadSpinAnim.setValue(0);
+      Animated.loop(
+        Animated.timing(uploadSpinAnim, {
+          toValue: 1,
+          duration: 1200,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        })
+      ).start();
+    } else {
+      uploadSpinAnim.stopAnimation();
+      uploadSpinAnim.setValue(0);
+    }
+  }, [isUploading]);
+
+  // Animated upload progress bar
+  useEffect(() => {
+    Animated.timing(uploadProgressAnim, {
+      toValue: uploadProgress / 100,
+      duration: 250,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: false, // width cannot use native driver
+    }).start();
+  }, [uploadProgress]);
+
+  // Fade + slide-up when playback area mounts
+  useEffect(() => {
+    if (!isRecording && recordedUri) {
+      playbackEntryAnim.setValue(0);
+      Animated.timing(playbackEntryAnim, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [isRecording, recordedUri]);
+
+  const spinDeg = uploadSpinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  const animateSendPress = (scaleAnim: Animated.Value, callback: () => void) => {
+    Animated.sequence([
+      Animated.timing(scaleAnim, { toValue: 0.82, duration: 80, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 40, bounciness: 10 }),
+    ]).start();
+    callback();
+  };
 
   const panResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => true,
@@ -263,23 +344,27 @@ export function ChatInputBar({
               </HStack>
             </Box>
 
-            <Pressable w={40} h={40} bg={isUploading || localSending ? "#CCCCCC" : PRIMARY_COLOR}
-              borderRadius={20}
-              justifyContent="center" alignItems="center"
-              onPress={() => {
-                // Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                if (!currentTextRef.current.trim()) return;
-                setLocalSending(true); // instant visual feedback — no round-trip to parent
-                onSend(currentTextRef.current);
-              }}
-              disabled={isUploading || localSending}
-            >
-              {isUploading || localSending ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <SendIcon size={18} color="#FFFFFF" />
-              )}
-            </Pressable>
+            <Animated.View style={{ transform: [{ scale: sendScaleAnim }] }}>
+              <Pressable w={40} h={40} bg={isUploading || localSending ? "#CCCCCC" : PRIMARY_COLOR}
+                borderRadius={20}
+                justifyContent="center" alignItems="center"
+                onPress={() => {
+                  if (!currentTextRef.current.trim()) return;
+                  animateSendPress(sendScaleAnim, () => {
+                    // Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    setLocalSending(true);
+                    onSend(currentTextRef.current);
+                  });
+                }}
+                disabled={isUploading || localSending}
+              >
+                {isUploading || localSending ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <SendIcon size={18} color="#FFFFFF" />
+                )}
+              </Pressable>
+            </Animated.View>
           </HStack>
         )}
 
@@ -360,53 +445,98 @@ export function ChatInputBar({
           </HStack>
         )}
 
+        {/* ── Stopping / Processing ── */}
+        {isStoppingRecording && (
+          <HStack px="$4" py="$2" alignItems="center" space="sm" minHeight={56}>
+            <Box w={44} h={44} bg="#E53935" borderRadius={22} justifyContent="center" alignItems="center" opacity={0.5}>
+              <MaterialIcons name="mic" size={24} color="#FFFFFF" />
+            </Box>
+            <Animated.View style={{ flex: 1, opacity: stoppingPulseAnim }}>
+              <Box bg="#FFF0F0" borderRadius={22} borderWidth={1} borderColor="#FFCDD2"
+                height={44} justifyContent="center" px="$4"
+              >
+                <Text fontSize={13} color="#E53935" fontWeight="$medium">Processing...</Text>
+              </Box>
+            </Animated.View>
+            <Box w={44} h={44} bg="#F5F5F5" borderRadius={22} borderWidth={1} borderColor="#E0E0E0"
+              justifyContent="center" alignItems="center" opacity={0.4}
+            >
+              <MaterialIcons name="stop" size={22} color="#E53935" />
+            </Box>
+          </HStack>
+        )}
+
         {/* ── Post-recording Playback ── */}
         {!isRecording && recordedUri && (
-          <HStack px="$4" py="$2" alignItems="center" space="sm" minHeight={56}>
-            <Pressable w={36} h={36} justifyContent="center" alignItems="center"
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                onCancelVoiceNote();
-              }}
-              disabled={isUploading}
-            >
-              <MaterialIcons name="delete" size={22} color={isUploading ? "#CCCCCC" : "#E53935"} />
-            </Pressable>
+          <Animated.View style={{
+            opacity: playbackEntryAnim,
+            transform: [{ translateY: playbackEntryAnim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }],
+          }}>
+            <HStack px="$4" py="$2" alignItems="center" space="sm" minHeight={56}>
+              <Pressable w={36} h={36} justifyContent="center" alignItems="center"
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  onCancelVoiceNote();
+                }}
+                disabled={isUploading}
+              >
+                <MaterialIcons name="delete" size={22} color={isUploading ? "#CCCCCC" : "#E53935"} />
+              </Pressable>
 
-            <Box flex={1} bg="#F5F5F5" borderRadius={22} borderWidth={1} borderColor="#E0E0E0"
-              height={44} overflow="hidden" justifyContent="center" px="$2"
-              opacity={isUploading ? 0.6 : 1}
-            >
-              <HStack alignItems="center" space="sm">
-                <Pressable w={32} h={32} justifyContent="center" alignItems="center" onPress={onTogglePlayback} disabled={isUploading}>
-                  <MaterialIcons name={isPlayingBack ? "pause" : "play-arrow"} size={24} color={isUploading ? "#CCCCCC" : PRIMARY_COLOR} />
-                </Pressable>
-                <HStack flex={1} alignItems="center" justifyContent="space-between" mx="$1">
-                  {Array.from({ length: 14 }, (_, i) => (
-                    <Box key={i} w={3} borderRadius={2}
-                      bg={isPlayingBack ? PRIMARY_COLOR : "#CCCCCC"}
-                      style={{ height: 4 + (Math.sin(i * 0.8) * 10 + 10) }}
-                    />
-                  ))}
+              <Box flex={1} bg="#F5F5F5" borderRadius={22} borderWidth={1} borderColor="#E0E0E0"
+                height={44} overflow="hidden" justifyContent="center" px="$2"
+                opacity={isUploading ? 0.6 : 1}
+              >
+                <HStack alignItems="center" space="sm">
+                  <Pressable w={32} h={32} justifyContent="center" alignItems="center" onPress={onTogglePlayback} disabled={isUploading}>
+                    <MaterialIcons name={isPlayingBack ? "pause" : "play-arrow"} size={24} color={isUploading ? "#CCCCCC" : PRIMARY_COLOR} />
+                  </Pressable>
+                  <HStack flex={1} alignItems="center" justifyContent="space-between" mx="$1">
+                    {Array.from({ length: 14 }, (_, i) => (
+                      <Box key={i} w={3} borderRadius={2}
+                        bg={isUploading ? PRIMARY_COLOR : (isPlayingBack ? PRIMARY_COLOR : "#CCCCCC")}
+                        style={{ height: 4 + (Math.sin(i * 0.8) * 10 + 10) }}
+                      />
+                    ))}
+                  </HStack>
+                  <Text fontSize={11} color="#666666">{formatTime(recordingSeconds)}</Text>
                 </HStack>
-                <Text fontSize={11} color="#666666">{formatTime(recordingSeconds)}</Text>
-              </HStack>
-            </Box>
 
-            <Pressable w={44} h={44} bg={isUploading ? "#CCCCCC" : PRIMARY_COLOR}
-              borderRadius={22} justifyContent="center" alignItems="center"
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                onSendVoiceNote();
-              }}
-              disabled={isUploading}
-            >
-              {isUploading
-                ? <MaterialIcons name="hourglass-empty" size={20} color="#FFFFFF" />
-                : <SendIcon size={18} color="#FFFFFF" />
-              }
-            </Pressable>
-          </HStack>
+                {/* Upload progress bar */}
+                {isUploading && (
+                  <Box position="absolute" bottom={0} left={0} right={0} height={3} bg="rgba(0,0,0,0.06)" borderBottomLeftRadius={22} borderBottomRightRadius={22}>
+                    <Animated.View style={{
+                      height: '100%',
+                      backgroundColor: PRIMARY_COLOR,
+                      borderRadius: 2,
+                      width: uploadProgressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
+                    }} />
+                  </Box>
+                )}
+              </Box>
+
+              <Animated.View style={{ transform: [{ scale: voiceSendScaleAnim }] }}>
+                <Pressable w={44} h={44} bg={isUploading ? "#CCCCCC" : PRIMARY_COLOR}
+                  borderRadius={22} justifyContent="center" alignItems="center"
+                  onPress={() => {
+                    animateSendPress(voiceSendScaleAnim, () => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      onSendVoiceNote();
+                    });
+                  }}
+                  disabled={isUploading}
+                >
+                  {isUploading ? (
+                    <Animated.View style={{ transform: [{ rotate: spinDeg }] }}>
+                      <MaterialIcons name="hourglass-empty" size={20} color="#FFFFFF" />
+                    </Animated.View>
+                  ) : (
+                    <SendIcon size={18} color="#FFFFFF" />
+                  )}
+                </Pressable>
+              </Animated.View>
+            </HStack>
+          </Animated.View>
         )}
 
         {/* Swipe-up handle (private chats only) */}

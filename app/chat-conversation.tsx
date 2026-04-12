@@ -23,7 +23,7 @@ import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Animated, Dimensions, KeyboardAvoidingView, PanResponder, Platform } from "react-native";
+import { ActivityIndicator, Animated, Dimensions, Easing, KeyboardAvoidingView, PanResponder, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { ChatHeader } from "@/components/chat/ChatHeader";
@@ -86,15 +86,90 @@ function EmptyChatState({ name }: { name: string }) {
   );
 }
 
+const CHAT_SKELETON_ROWS: Array<{
+  side: "left" | "right";
+  width: `${number}%`;
+  height: number;
+  avatar: boolean;
+}> = [
+  { side: "left",  width: "55%", height: 42, avatar: true  },
+  { side: "right", width: "68%", height: 42, avatar: false },
+  { side: "right", width: "48%", height: 42, avatar: false },
+  { side: "left",  width: "72%", height: 58, avatar: true  },
+  { side: "right", width: "40%", height: 42, avatar: false },
+  { side: "left",  width: "50%", height: 42, avatar: false },
+  { side: "right", width: "62%", height: 58, avatar: false },
+];
+
 function ChatLoadingSkeleton() {
+  const shimmerX = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(shimmerX, {
+        toValue: 1,
+        duration: 1300,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    ).start();
+    return () => shimmerX.stopAnimation();
+  }, []);
+
+  const translateX = shimmerX.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-250, 350],
+  });
+
+  const ShimmerStrip = () => (
+    <Animated.View
+      style={{
+        position: "absolute",
+        top: 0, bottom: 0,
+        width: 90,
+        backgroundColor: "rgba(255,255,255,0.58)",
+        transform: [{ translateX }],
+      }}
+    />
+  );
+
   return (
-    <Box flex={1} py="$5" px="$5">
-      <VStack space="xl">
-        <Box w="60%" h={40} bg="#F5F5F5" borderRadius={15} alignSelf="flex-start" opacity={0.6} />
-        <Box w="70%" h={40} bg="#FCEFEF" borderRadius={15} alignSelf="flex-end" opacity={0.6} />
-        <Box w="40%" h={40} bg="#F5F5F5" borderRadius={15} alignSelf="flex-start" opacity={0.6} />
-        <Box w="80%" h={40} bg="#FCEFEF" borderRadius={15} alignSelf="flex-end" opacity={0.6} />
-        <Box w="50%" h={40} bg="#F5F5F5" borderRadius={15} alignSelf="flex-start" opacity={0.6} />
+    <Box flex={1} px="$4" pt="$5" pb="$2">
+      <VStack space="lg">
+        {CHAT_SKELETON_ROWS.map((row, i) => (
+          <Box
+            key={i}
+            flexDirection="row"
+            alignItems="flex-end"
+            justifyContent={row.side === "right" ? "flex-end" : "flex-start"}
+          >
+            {/* Avatar placeholder (left side only, first bubble in a group) */}
+            {row.side === "left" && row.avatar && (
+              <Box
+                w={30} h={30} borderRadius={15}
+                bg="#E4E4E4"
+                mr="$2" mb="$0.5"
+                overflow="hidden"
+              >
+                <ShimmerStrip />
+              </Box>
+            )}
+            {/* Spacer when no avatar so bubble aligns correctly */}
+            {row.side === "left" && !row.avatar && (
+              <Box w={38} />
+            )}
+
+            <Box
+              w={row.width}
+              h={row.height}
+              borderRadius={row.height / 2}
+              bg={row.side === "left" ? "#EBEBEB" : "#F5D5D7"}
+              overflow="hidden"
+            >
+              <ShimmerStrip />
+            </Box>
+          </Box>
+        ))}
       </VStack>
     </Box>
   );
@@ -238,6 +313,27 @@ export default function ChatConversationScreen() {
   const [isSending, setIsSending] = useState(false);
   const sendFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showOptions, setShowOptions] = useState(false);
+
+  // ── Message list fade-in ───────────────────────────────────────────────────
+  const messagesOpacity = useRef(new Animated.Value(0)).current;
+  const [showSkeleton, setShowSkeleton] = useState(true);
+  useEffect(() => {
+    if (!isMessagesLoading) {
+      // Brief delay so FlatList layout settles before we reveal it
+      const timer = setTimeout(() => {
+        setShowSkeleton(false);
+        Animated.timing(messagesOpacity, {
+          toValue: 1,
+          duration: 350,
+          useNativeDriver: true,
+        }).start();
+      }, 120);
+      return () => clearTimeout(timer);
+    } else {
+      messagesOpacity.setValue(0);
+      setShowSkeleton(true);
+    }
+  }, [isMessagesLoading]);
   const [showCompatibility, setShowCompatibility] = useState(false);
   const [isLiked, setIsLiked] = useState(isLikedParam === "1");
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
@@ -252,6 +348,7 @@ export default function ChatConversationScreen() {
   // ── Recording ──────────────────────────────────────────────────────────────
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [isStoppingRecording, setIsStoppingRecording] = useState(false);
   const [recordedUri, setRecordedUri] = useState<string | null>(null);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [isPlayingBack, setIsPlayingBack] = useState(false);
@@ -261,7 +358,7 @@ export default function ChatConversationScreen() {
   const recordDotAnim = useRef(new Animated.Value(1)).current;
 
   // ── Upload ─────────────────────────────────────────────────────────────────
-  const { upload, isUploading } = useS3Upload();
+  const { upload, isUploading, progress: uploadProgress } = useS3Upload();
 
   // ── Questionnaire sheet ────────────────────────────────────────────────────
   const [showQuestionnaire, setShowQuestionnaire] = useState(false);
@@ -396,13 +493,16 @@ export default function ChatConversationScreen() {
   const stopRecording = async () => {
     if (!recording) return;
     if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null; }
-    stopWaveformAnimation(); setIsRecording(false);
+    stopWaveformAnimation();
+    setIsRecording(false);
+    setIsStoppingRecording(true); // show processing animation while file finalises
     try {
       const status = await recording.getStatusAsync();
       if (status.isRecording || status.canRecord) await recording.stopAndUnloadAsync();
     } catch (err) { console.warn("Recording already stopped:", err); }
     const uri = recording.getURI();
     setRecording(null);
+    setIsStoppingRecording(false);
     if (uri) setRecordedUri(uri);
   };
 
@@ -794,9 +894,10 @@ export default function ChatConversationScreen() {
           )}
 
           {/* Message List */}
-          {isMessagesLoading ? (
+          {showSkeleton ? (
             <ChatLoadingSkeleton />
           ) : (
+            <Animated.View style={{ flex: 1, opacity: messagesOpacity }}>
             <FlatList
               ref={flatListRef}
               data={flattenedMessages}
@@ -849,6 +950,7 @@ export default function ChatConversationScreen() {
                style={{ flex: 1 }}
                onScrollToIndexFailed={handleOnScrollToIndexFailed}
              />
+            </Animated.View>
           )}
 
           {/* Input Bar (with banners + recording) */}
@@ -859,8 +961,10 @@ export default function ChatConversationScreen() {
             onImagePick={handleImagePick}
             onFilePick={handleFilePick}
             isUploading={isUploading}
+            uploadProgress={uploadProgress}
             isSending={isSending}
             isRecording={isRecording}
+            isStoppingRecording={isStoppingRecording}
             recordedUri={recordedUri}
             recordingSeconds={recordingSeconds}
             isPlayingBack={isPlayingBack}
