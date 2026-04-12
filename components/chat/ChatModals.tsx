@@ -10,10 +10,12 @@ import { Box, HStack, Pressable, ScrollView, Text, VStack } from "@gluestack-ui/
 import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
   Dimensions,
+  Keyboard,
   Modal,
   PanResponderInstance,
   Platform,
@@ -177,6 +179,20 @@ export function ChatModals({
   isSubmittingQuestionnaire,
 }: ChatModalsProps) {
   const isAnyActionInProgress = isBlocking || isUnblocking || isReporting || isDeleting || isJoiningGroup || isLeavingGroup || isCreatingMeetup || isSubmittingQuestionnaire;
+
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      (e) => setKeyboardHeight(e.endCoordinates.height),
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setKeyboardHeight(0),
+    );
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, []);
+
   return (
     <>
       {/* ── Full-screen image viewer ── */}
@@ -396,7 +412,9 @@ export function ChatModals({
 
                 {/* Report — form */}
                 {activeSheet === "report" && reportStep === "form" && (
-                  <Box bg="#FFFFFF" borderTopLeftRadius={24} borderTopRightRadius={24} pb="$6">
+                  <Box bg="#FFFFFF" borderTopLeftRadius={24} borderTopRightRadius={24} pb="$6"
+                    style={{ marginBottom: keyboardHeight }}
+                  >
                     <DragHandle color="#CCCCCC" panHandlers={sheetPanResponder.panHandlers} />
                     <Box px="$6" pt="$1">
                       <Text fontSize={20} fontWeight="$bold" color="#1A1A1A" mb="$1">Report {name}</Text>

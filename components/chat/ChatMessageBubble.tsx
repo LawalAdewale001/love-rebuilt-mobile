@@ -5,6 +5,7 @@ import { Box, HStack, Pressable, Text, VStack } from "@gluestack-ui/themed";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { MeetupBubbleIcon } from "@/components/ui/chat-icons";
+import { memo } from "react";
 import { Dimensions, Linking, TouchableWithoutFeedback } from "react-native";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -32,7 +33,7 @@ interface ChatMessageBubbleProps {
   showSenderName?: boolean;
 }
 
-export function ChatMessageBubble({
+export const ChatMessageBubble = memo(function ChatMessageBubble({
   msg,
   isGroup,
   conversationPartnerName,
@@ -271,7 +272,7 @@ export function ChatMessageBubble({
       </HStack>
     </Pressable>
   );
-}
+});
 
 // ── Context Action Bar (WhatsApp-style) ─────────────────────────────────────
 
