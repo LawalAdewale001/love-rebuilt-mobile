@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   CallOptionIcon,
   VideoCallOptionIcon,
@@ -12,7 +12,7 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Box, HStack, Pressable, Text, VStack } from "@gluestack-ui/themed";
 import { Image } from "expo-image";
 import { useRef } from "react";
-import { ActivityIndicator, Animated } from "react-native";
+import { ActivityIndicator, Animated, Easing } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useInteractionMutation } from "@/lib/queries";
@@ -82,6 +82,33 @@ export function ChatHeader({
   const router = useRouter();
   const likeScale = useRef(new Animated.Value(1)).current;
   const interactionMutation = useInteractionMutation();
+
+  // ── Menu animation ──────────────────────────────────────────────────────────
+  const menuAnim = useRef(new Animated.Value(0)).current;
+  const [menuMounted, setMenuMounted] = useState(false);
+
+  useEffect(() => {
+    if (showOptions) {
+      setMenuMounted(true);
+      menuAnim.setValue(0);
+      Animated.spring(menuAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        overshootClamping: false,
+        restDisplacementThreshold: 0.01,
+        restSpeedThreshold: 0.01,
+        tension: 280,
+        friction: 22,
+      }).start();
+    } else {
+      Animated.timing(menuAnim, {
+        toValue: 0,
+        duration: 120,
+        easing: Easing.in(Easing.ease),
+        useNativeDriver: true,
+      }).start(() => setMenuMounted(false));
+    }
+  }, [showOptions]);
 
   const formatLastSeen = (dateStr?: string) => {
     if (!dateStr) return "Offline";
@@ -184,18 +211,21 @@ export function ChatHeader({
               <Text color="#FFFFFF" fontSize={14} fontWeight="$bold">Join</Text>
             </Pressable>
           ) : (
-            <Pressable 
-              onPress={() => setShowOptions(!showOptions)} 
+            <Pressable
+              onPress={() => setShowOptions(!showOptions)}
               disabled={isUploading || isUnblocking}
               bg="transparent"
-              p="$2"
-              borderRadius="$full"
-              hitSlop={15}
+              w={44}
+              h={44}
+              borderRadius={22}
+              justifyContent="center"
+              alignItems="center"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <MaterialIcons 
-                name="more-vert" 
-                size={26} 
-                color={(isUploading || isUnblocking) ? "#BDBDBD" : "#1A1A1A"} 
+              <MaterialIcons
+                name="more-vert"
+                size={26}
+                color={(isUploading || isUnblocking) ? "#BDBDBD" : "#1A1A1A"}
               />
             </Pressable>
           )}
@@ -203,20 +233,39 @@ export function ChatHeader({
       </HStack>
 
       {/* Options Dropdown — backdrop lives in the parent screen at screen level */}
-      {showOptions && (
+      {menuMounted && (
+        <Animated.View
+          style={{
+            position: "absolute",
+            top: 70,
+            right: 16,
+            zIndex: 100,
+            opacity: menuAnim,
+            transform: [
+              {
+                scale: menuAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.82, 1],
+                }),
+              },
+              {
+                translateY: menuAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [-6, 0],
+                }),
+              },
+            ],
+          }}
+        >
         <Box
-          position="absolute"
-          top={70}
-          right={16}
           bg="#FFFFFF"
           borderRadius={12}
           py="$1"
-          zIndex={100}
           shadowColor="#000000"
           shadowOffset={{ width: 0, height: 4 }}
-          shadowOpacity={0.12}
-          shadowRadius={12}
-          elevation={8}
+          shadowOpacity={0.14}
+          shadowRadius={14}
+          elevation={10}
           minWidth={220}
         >
           {(isGroup ? GROUP_OPTIONS_MENU : PRIVATE_OPTIONS_MENU).map((option, index) => {
@@ -270,6 +319,7 @@ export function ChatHeader({
             );
           })}
         </Box>
+        </Animated.View>
       )}
     </>
   );
