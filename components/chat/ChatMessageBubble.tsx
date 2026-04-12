@@ -305,7 +305,7 @@ export function ChatContextMenu({ msg, onClose, onReply, onCopy, onEdit, onDelet
                 <Text fontSize={11} color="#1A1A1A" mt="$0.5">Copy</Text>
               </Pressable>
  
-              {msg.sent && (
+              {msg.sent && msg.type !== MessageType.MISSED_CALL && msg.type !== MessageType.MEETUP && (
                 <Pressable alignItems="center" onPress={onEdit} px="$3" py="$1">
                   <MaterialIcons name="edit" size={22} color="#1A1A1A" />
                   <Text fontSize={11} color="#1A1A1A" mt="$0.5">Edit</Text>
