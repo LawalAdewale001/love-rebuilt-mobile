@@ -3,20 +3,35 @@
  * Add your query keys and hooks here for a single source of truth.
  */
 
-import { apiClient } from '@/lib/api-client';
-import { type AuthUser, setAuth } from '@/lib/auth-store';
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiClient } from "@/lib/api-client";
+import { type AuthUser, setAuth } from "@/lib/auth-store";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 // ─── Query keys (use for invalidations and consistency)
 export const queryKeys = {
-  all: ['api'] as const,
-  auth: () => [...queryKeys.all, 'auth'] as const,
-  profile: () => [...queryKeys.all, 'profile'] as const,
-  chats: () => [...queryKeys.all, 'chats'] as const,
-  chatSearch: (query: string) => [...queryKeys.all, 'chatSearch', query] as const,
-  messages: (conversationId: string) => [...queryKeys.all, 'messages', conversationId] as const,
-  blockedUsers: () => [...queryKeys.all, 'blockedUsers'] as const,
-  callToken: (channelName: string, uid?: string) => [...queryKeys.all, 'callToken', channelName, uid ?? null] as const,
+  all: ["api"] as const,
+  auth: () => [...queryKeys.all, "auth"] as const,
+  profile: () => [...queryKeys.all, "profile"] as const,
+  chats: () => [...queryKeys.all, "chats"] as const,
+  chatSearch: (query: string) =>
+    [...queryKeys.all, "chatSearch", query] as const,
+  messages: (conversationId: string) =>
+    [...queryKeys.all, "messages", conversationId] as const,
+  blockedUsers: () => [...queryKeys.all, "blockedUsers"] as const,
+  callToken: (channelName: string, uid?: string) =>
+    [...queryKeys.all, "callToken", channelName, uid ?? null] as const,
+
+  userSearch: (query: string) =>
+    [...queryKeys.all, "userSearch", query] as const,
+  userProfileById: (id: string) =>
+    [...queryKeys.all, "userProfileById", id] as const,
+  discoveryGeneral: () => [...queryKeys.all, "discoveryGeneral"] as const,
+  discoveryMatches: () => [...queryKeys.all, "discoveryMatches"] as const,
 };
 
 // ─── Auth types
@@ -36,7 +51,7 @@ export function useLoginMutation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: LoginRequest) =>
-      apiClient.post<LoginResponse>('/api/auth/login', data),
+      apiClient.post<LoginResponse>("/api/auth/login", data),
     onSuccess: async (response) => {
       await setAuth(response.accessToken, response.user);
       queryClient.invalidateQueries({ queryKey: queryKeys.all });
@@ -72,8 +87,32 @@ export type UserProfile = {
 
 export function useProfileQuery() {
   return useQuery({
-    queryKey: queryKeys.profile(),
-    queryFn: () => apiClient.get<UserProfile>('/api/user/profile'),
+    queryKey: ["profile"], // or queryKeys.profile()
+    queryFn: async () => {
+      // Fetch as 'any' to bypass strict generic typing temporarily
+      const response = await apiClient.get<any>("/api/user/profile");
+
+      return response?.data?.result || response?.result || response;
+    },
+  });
+}
+
+export function useUserProfileByIdQuery(id: string) {
+  return useQuery({
+    queryKey: [...queryKeys.profile(), id], // Unique key per user ID
+    queryFn: () => apiClient.get<UserProfile>(`/api/user/${id}`),
+    enabled: !!id, // Only fetch if an ID is provided
+  });
+}
+
+export function useUserSearchQuery(query: string) {
+  return useQuery({
+    queryKey: [...queryKeys.all, "userSearch", query],
+    queryFn: () =>
+      apiClient.get<UserProfile[]>("/api/user/search", {
+        params: { name: query },
+      }),
+    enabled: query.trim().length > 0, // Only fetch if there's a search term
   });
 }
 
@@ -93,7 +132,7 @@ export type ChatMember = {
 
 export type ChatConversation = {
   id: string;
-  type: 'direct' | 'group';
+  type: "direct" | "group";
   name: string;
   description: string;
   image: string | null;
@@ -137,8 +176,8 @@ export function useChatListQuery() {
   return useInfiniteQuery({
     queryKey: queryKeys.chats(),
     queryFn: ({ pageParam = 1 }) =>
-      apiClient.get<ChatListResponse>('/api/chat/list', {
-        params: { page: String(pageParam), limit: '20' },
+      apiClient.get<ChatListResponse>("/api/chat/list", {
+        params: { page: String(pageParam), limit: "20" },
       }),
     initialPageParam: 1,
     getNextPageParam: (lastPage) =>
@@ -166,7 +205,7 @@ export function useChatSearchQuery(query: string) {
   return useQuery({
     queryKey: queryKeys.chatSearch(query),
     queryFn: () =>
-      apiClient.get<ChatSearchResult>('/api/chat/search', {
+      apiClient.get<ChatSearchResult>("/api/chat/search", {
         params: { query },
       }),
     enabled: query.trim().length > 0,
@@ -229,7 +268,7 @@ export function useMessagesQuery(conversationId: string) {
     queryKey: queryKeys.messages(conversationId),
     queryFn: ({ pageParam = 1 }) =>
       apiClient.get<MessagesResponse>(`/api/chat/messages/${conversationId}`, {
-        params: { page: String(pageParam), limit: '30', order: 'newest' },
+        params: { page: String(pageParam), limit: "30", order: "newest" },
       }),
     initialPageParam: 1,
     getNextPageParam: (lastPage) =>
@@ -248,8 +287,10 @@ export function useConversationQuery(conversationId: string) {
     queryKey: [...queryKeys.chats(), conversationId],
     queryFn: async () => {
       try {
-        const response = await apiClient.get<ChatConversation>(`/api/chat/${conversationId}`);
-        // If meta/data structure is present, interceptors should have unwrapped it, 
+        const response = await apiClient.get<ChatConversation>(
+          `/api/chat/${conversationId}`,
+        );
+        // If meta/data structure is present, interceptors should have unwrapped it,
         // but if it returned raw data, we take it.
         return response;
       } catch (err) {
@@ -257,7 +298,9 @@ export function useConversationQuery(conversationId: string) {
         const chatsCache = queryClient.getQueryData<any>(queryKeys.chats());
         if (chatsCache?.pages) {
           for (const page of chatsCache.pages) {
-            const found = page.result?.find((c: ChatConversation) => c.id === conversationId);
+            const found = page.result?.find(
+              (c: ChatConversation) => c.id === conversationId,
+            );
             if (found) return found;
           }
         }
@@ -271,8 +314,8 @@ export function useConversationQuery(conversationId: string) {
 // ─── Discovery interaction (like/dislike)
 export function useInteractionMutation() {
   return useMutation({
-    mutationFn: (data: { receiverId: string; type: 'like' | 'dislike' }) =>
-      apiClient.post('/api/discovery/interaction', data),
+    mutationFn: (data: { receiverId: string; type: "like" | "dislike" }) =>
+      apiClient.post("/api/discovery/interaction", data),
   });
 }
 
@@ -281,7 +324,7 @@ export function useBlockMutation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (blockedId: string) =>
-      apiClient.post('/api/chat/block', { blockedId }),
+      apiClient.post("/api/chat/block", { blockedId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
     },
@@ -302,8 +345,11 @@ export function useUnblockMutation() {
 export function useReportMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { targetId: string; targetType: 'user' | 'group'; reason: string }) =>
-      apiClient.post('/api/chat/report', data),
+    mutationFn: (data: {
+      targetId: string;
+      targetType: "user" | "group";
+      reason: string;
+    }) => apiClient.post("/api/chat/report", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
     },
@@ -317,7 +363,9 @@ export function useJoinGroupMutation() {
       apiClient.post(`/api/chat/groups/${groupId}/join`),
     onSuccess: (_, groupId) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
-      queryClient.invalidateQueries({ queryKey: [...queryKeys.chats(), groupId] });
+      queryClient.invalidateQueries({
+        queryKey: [...queryKeys.chats(), groupId],
+      });
       queryClient.invalidateQueries({ queryKey: queryKeys.messages(groupId) });
     },
   });
@@ -330,7 +378,9 @@ export function useLeaveGroupMutation() {
       apiClient.delete(`/api/chat/groups/${groupId}/leave`),
     onSuccess: (_, groupId) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
-      queryClient.invalidateQueries({ queryKey: [...queryKeys.chats(), groupId] });
+      queryClient.invalidateQueries({
+        queryKey: [...queryKeys.chats(), groupId],
+      });
     },
   });
 }
@@ -347,9 +397,11 @@ export function useCreateMeetupMutation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateMeetupRequest) =>
-      apiClient.post('/api/chat/meetups', data),
+      apiClient.post("/api/chat/meetups", data),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.messages(variables.conversationId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.messages(variables.conversationId),
+      });
       queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
     },
   });
@@ -358,13 +410,19 @@ export function useCreateMeetupMutation() {
 export function useChatProgressMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { conversationId: string; reason: string; showChatProgressBanner: boolean }) =>
+    mutationFn: (data: {
+      conversationId: string;
+      reason: string;
+      showChatProgressBanner: boolean;
+    }) =>
       apiClient.post(`/api/chat/${data.conversationId}/progress`, {
         reason: data.reason,
         showChatProgressBanner: data.showChatProgressBanner,
       }),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: [...queryKeys.chats(), variables.conversationId] });
+      queryClient.invalidateQueries({
+        queryKey: [...queryKeys.chats(), variables.conversationId],
+      });
       queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
     },
   });
@@ -379,16 +437,166 @@ export type CallTokenResponse = {
 export function useCallTokenQuery(channelName: string, uid?: string) {
   const params: Record<string, string> = { channelName };
   if (uid) params.uid = uid;
-  
+
   return useQuery({
     queryKey: queryKeys.callToken(channelName, uid),
     queryFn: () =>
-      apiClient.get<CallTokenResponse>('/api/call/token', {
+      apiClient.get<CallTokenResponse>("/api/call/token", {
         params,
       }),
     enabled: !!channelName,
     staleTime: 0,
     gcTime: 0,
     retry: 1,
+  });
+}
+
+// --- Auth: Register ---
+type RegisterRequest = {
+  fullName: string;
+  email: string;
+  password: string;
+};
+
+export function useRegisterMutation() {
+  return useMutation({
+    mutationFn: (data: RegisterRequest) =>
+      apiClient.post("/api/auth/register", data),
+  });
+}
+
+// --- Auth: Verify Email ---
+type VerifyEmailRequest = {
+  email: string;
+  code: string;
+};
+
+export function useVerifyEmailMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: VerifyEmailRequest) =>
+      // Assuming verify returns the same response as login (user + token) so we can log them in immediately
+      apiClient.post<{ user: AuthUser; accessToken: string }>(
+        "/api/auth/verify",
+        data,
+      ),
+    onSuccess: async (response) => {
+      if (response.accessToken) {
+        await setAuth(response.accessToken, response.user);
+        queryClient.invalidateQueries({ queryKey: queryKeys.all });
+      }
+    },
+  });
+}
+
+// --- Auth: Resend Code ---
+export function useResendCodeMutation() {
+  return useMutation({
+    mutationFn: (data: { email: string }) =>
+      apiClient.post("/api/auth/resend", data),
+  });
+}
+
+// --- User: Update Profile (Used for Onboarding Steps) ---
+export function useUpdateProfileMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<UserProfile>) =>
+      apiClient.patch("/api/user/update", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.profile() });
+    },
+  });
+}
+
+export function useDiscoveryGeneralQuery(
+  filter: "forYou" | "nearby" = "forYou",
+) {
+  return useQuery({
+    queryKey: ["discoveryGeneral", filter],
+    // Pass the filter as a query param so the backend knows what to return
+    queryFn: async () => {
+      // Assuming your apiClient returns the raw JSON.
+      // Adjust the params key based on what your Swagger UI specifies (e.g., 'type', 'sort', or 'filter')
+      const response = await apiClient.get<any>("/api/discovery/general", {
+        params: { filter },
+      });
+      return response;
+    },
+  });
+}
+
+export function useDiscoveryMatchesQuery() {
+  return useQuery({
+    // queryKey: queryKeys.discoveryMatches(),
+    queryKey: ["discoveryMatches"],
+    queryFn: () => apiClient.get<UserProfile[]>("/api/discovery/matches"),
+  });
+}
+
+export function useRecordInteractionMutation() {
+  return useMutation({
+    // Assuming the payload requires the target user's ID and the action ('like' or 'pass')
+    mutationFn: (data: { targetUserId: string; action: "like" | "pass" }) =>
+      apiClient.post("/api/discovery/interaction", data),
+  });
+}
+
+// --- Discovery Preferences ---
+export function useDiscoveryPreferencesQuery() {
+  return useQuery({
+    queryKey: ["discoveryPreferences"],
+    queryFn: () => apiClient.get("/api/discovery/preferences"),
+  });
+}
+
+export function useUpdateDiscoveryPreferencesMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: any) =>
+      apiClient.patch("/api/discovery/preferences", data),
+    onSuccess: () => {
+      // Invalidate everything related to discovery so the home and matches screens instantly refresh!
+      queryClient.invalidateQueries({ queryKey: ["discoveryPreferences"] });
+      queryClient.invalidateQueries({ queryKey: ["discoveryGeneral"] });
+      queryClient.invalidateQueries({ queryKey: ["discoveryMatches"] });
+    },
+  });
+}
+
+// --- Location Endpoints ---
+export function useLocationSearchQuery(query: string) {
+  return useQuery({
+    queryKey: ["locationSearch", query],
+    queryFn: () =>
+      apiClient.get<any[]>(`/api/location/search`, { params: { query } }),
+    enabled: query.trim().length > 2, // Only trigger if they typed at least 3 characters
+  });
+}
+
+// Fetches location based on IP from the backend
+export function useCurrentLocationQuery(enabled: boolean) {
+  return useQuery({
+    queryKey: ["currentLocation"],
+    queryFn: () => apiClient.get<{ location: string }>("/api/location/current"),
+    enabled,
+  });
+}
+
+// --- Notification Endpoints ---
+export function useNotificationListQuery() {
+  return useQuery({
+    queryKey: ["notifications"],
+    queryFn: () => apiClient.get<any[]>("/api/notification/list"),
+  });
+}
+
+export function useMarkNotificationReadMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string | number) =>
+      apiClient.patch(`/api/notification/${id}/read`),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["notifications"] }),
   });
 }

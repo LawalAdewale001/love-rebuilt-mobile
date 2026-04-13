@@ -21,8 +21,8 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import "react-native-reanimated";
 
-import { ToastProvider } from "@/components/ui/toast";
 import { OfflineBanner } from "@/components/ui/OfflineBanner";
+import { ToastProvider } from "@/components/ui/toast";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import "@/lib/api-client-interceptors"; // Registers axios interceptors for protected routes
 import { getAccessToken, loadAuth } from "@/lib/auth-store";
@@ -37,7 +37,9 @@ export const unstable_settings = {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
-  const [authState, setAuthState] = useState<"loading" | "authenticated" | "unauthenticated">("loading");
+  const [authState, setAuthState] = useState<
+    "loading" | "authenticated" | "unauthenticated"
+  >("loading");
 
   useEffect(() => {
     loadAuth().then(() => {
@@ -63,7 +65,6 @@ export default function RootLayout() {
               <Stack.Screen name="(auth)" options={{ headerShown: false }} />
               {/* The Main App flow */}
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-
               {/* Modals and Overlays */}
               <Stack.Screen
                 name="modal"
@@ -73,7 +74,6 @@ export default function RootLayout() {
                   headerShown: false,
                 }}
               />
-
               {/* New Screens */}
               <Stack.Screen name="search" options={{ headerShown: false }} />
               <Stack.Screen
@@ -104,6 +104,11 @@ export default function RootLayout() {
               <Stack.Screen
                 name="call-screen"
                 options={{ headerShown: false }}
+              />
+              <Stack.Screen name="settings" options={{ headerShown: false }} />
+              <Stack.Screen
+                name="settings-location"
+                options={{ presentation: "modal", headerShown: false }}
               />
             </Stack>
             <StatusBar style="auto" />

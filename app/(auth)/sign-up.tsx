@@ -1,6 +1,10 @@
+import { showToast } from "@/components/ui/toast";
+import { useRegisterMutation } from "@/lib/queries";
+import { MaterialIcons } from "@expo/vector-icons";
 import {
   Box,
   Button,
+  ButtonSpinner,
   ButtonText,
   Divider,
   HStack,
@@ -20,6 +24,55 @@ export default function SignUpScreen() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
 
+  // Form State
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  const registerMutation = useRegisterMutation();
+
+  const isFormFilled =
+    fullName.trim() && email.trim() && password && confirmPassword;
+  const canSubmit = isFormFilled && !registerMutation.isPending;
+
+  const handleSignUp = () => {
+    if (password !== confirmPassword) {
+      showToast("error", "Validation Error", "Passwords do not match");
+      return;
+    }
+    if (password.length < 6) {
+      showToast(
+        "error",
+        "Validation Error",
+        "Password must be at least 6 characters",
+      );
+      return;
+    }
+
+    registerMutation.mutate(
+      { fullName: fullName.trim(), email: email.trim(), password },
+      {
+        onSuccess: () => {
+          showToast(
+            "success",
+            "Account Created",
+            "Please verify your email address.",
+          );
+          // Pass the email to the next screen so we know who to verify
+          router.push({
+            pathname: "/verify-email",
+            params: { email: email.trim() },
+          });
+        },
+        onError: (error: any) => {
+          const message = error?.message || "Registration failed. Try again.";
+          showToast("error", "Sign Up Failed", message);
+        },
+      },
+    );
+  };
+
   return (
     <Box flex={1} bg="#E86673">
       <KeyboardAvoidingView
@@ -27,9 +80,7 @@ export default function SignUpScreen() {
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={{ flexGrow: 1 }} bounces={false}>
-          {/* Top Graphic Area */}
           <Box h={300} w="100%" position="relative">
-            {/* Logo here */}
             <Image
               source={require("@/assets/images/signup-header-bg.png")}
               style={{
@@ -43,7 +94,6 @@ export default function SignUpScreen() {
             />
           </Box>
 
-          {/* Bottom Sheet Form */}
           <Box
             flex={1}
             bg="$white"
@@ -75,6 +125,8 @@ export default function SignUpScreen() {
                   <InputField
                     placeholder="Full Name"
                     placeholderTextColor="$textLight400"
+                    value={fullName}
+                    onChangeText={setFullName}
                   />
                 </Input>
                 <Input
@@ -87,7 +139,10 @@ export default function SignUpScreen() {
                   <InputField
                     placeholder="Email Address"
                     keyboardType="email-address"
+                    autoCapitalize="none"
                     placeholderTextColor="$textLight400"
+                    value={email}
+                    onChangeText={setEmail}
                   />
                 </Input>
                 <Input
@@ -101,13 +156,18 @@ export default function SignUpScreen() {
                     type={showPassword ? "text" : "password"}
                     placeholder="Create Password"
                     placeholderTextColor="$textLight400"
+                    value={password}
+                    onChangeText={setPassword}
                   />
                   <InputSlot
                     pr="$4"
                     onPress={() => setShowPassword(!showPassword)}
                   >
-                    {/* Add Eye/EyeOff icon mapping to your IconSymbol or use Gluestack icons */}
-                    <Text>👁️</Text>
+                    <MaterialIcons
+                      name={showPassword ? "visibility-off" : "visibility"}
+                      size={20}
+                      color="#666666"
+                    />
                   </InputSlot>
                 </Input>
                 <Input
@@ -121,12 +181,18 @@ export default function SignUpScreen() {
                     type={showPassword ? "text" : "password"}
                     placeholder="Confirm Password"
                     placeholderTextColor="$textLight400"
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
                   />
                   <InputSlot
                     pr="$4"
                     onPress={() => setShowPassword(!showPassword)}
                   >
-                    <Text>👁️</Text>
+                    <MaterialIcons
+                      name={showPassword ? "visibility-off" : "visibility"}
+                      size={20}
+                      color="#666666"
+                    />
                   </InputSlot>
                 </Input>
               </VStack>
@@ -139,43 +205,56 @@ export default function SignUpScreen() {
                 <Divider flex={1} />
               </HStack>
 
-              {/* Social Login placeholders */}
               <HStack justifyContent="center" space="lg">
                 <Pressable
                   w={50}
                   h={50}
                   bg="$white"
-                  borderRadius="$full"
+                  borderRadius="$12.08"
                   borderWidth={1}
                   borderColor="$borderLight200"
                   justifyContent="center"
                   alignItems="center"
                 >
-                  <Text>G</Text>
+                  <MaterialIcons
+                    name="g-mobiledata"
+                    size={20}
+                    color="#666666"
+                  />
                 </Pressable>
                 <Pressable
                   w={50}
                   h={50}
                   bg="$textLight900"
-                  borderRadius="$full"
+                  borderRadius="$12.08"
                   justifyContent="center"
                   alignItems="center"
                 >
-                  <Text color="$white"></Text>
+                  <MaterialIcons name="apple" size={20} color="#FFFFFF" />
                 </Pressable>
               </HStack>
 
               <Button
                 size="xl"
-                bg="#E86673"
+                bg={canSubmit ? "#E86673" : "#F4F3F2"}
                 borderRadius="$full"
                 mt="$4"
-                onPress={() => router.push("/verify-email")}
+                disabled={!canSubmit}
+                onPress={handleSignUp}
               >
-                <ButtonText fontWeight="$bold">Create an Account</ButtonText>
+                {registerMutation.isPending ? (
+                  <ButtonSpinner color="#FFFFFF" />
+                ) : (
+                  <ButtonText
+                    fontWeight="$bold"
+                    color={canSubmit ? "#FFFFFF" : "$textLight400"}
+                  >
+                    Create an Account
+                  </ButtonText>
+                )}
               </Button>
 
-              <HStack justifyContent="center" mt="$2">
+              <HStack justifyContent="center" mb="$2">
                 <Text color="$textLight600">Have an Account? </Text>
                 <Pressable onPress={() => router.push("/sign-in")}>
                   <Text color="#E86673" fontWeight="$bold">

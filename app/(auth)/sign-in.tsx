@@ -21,8 +21,8 @@ import { KeyboardAvoidingView, Platform, ScrollView } from "react-native";
 import { showToast } from "@/components/ui/toast";
 import { useForm } from "@/hooks/use-form";
 import { ApiError } from "@/lib/api-client";
-import { useLoginMutation } from "@/lib/queries";
 import { registerForPushNotifications } from "@/lib/push-notifications";
+import { useLoginMutation } from "@/lib/queries";
 import { connectSocket } from "@/lib/socket";
 
 const loginSchema = Joi.object({
@@ -44,10 +44,7 @@ export default function SignInScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const loginMutation = useLoginMutation();
 
-  const form = useForm(
-    { email: "", password: "" },
-    loginSchema
-  );
+  const form = useForm({ email: "", password: "" }, loginSchema);
 
   const isFormFilled =
     form.values.email.trim().length > 0 &&
@@ -86,7 +83,7 @@ export default function SignInScreen() {
               : "Something went wrong. Please try again.";
           showToast("error", "Sign In Failed", message);
         },
-      }
+      },
     );
   };
 
@@ -167,7 +164,9 @@ export default function SignInScreen() {
                       keyboardType="email-address"
                       autoCapitalize="none"
                       value={form.values.email}
-                      onChangeText={(val: string) => form.setValue("email", val)}
+                      onChangeText={(val: string) =>
+                        form.setValue("email", val)
+                      }
                       onBlur={() => form.onBlur("email")}
                       pt={form.values.email ? "$4" : "$0"}
                     />
@@ -264,9 +263,7 @@ export default function SignInScreen() {
                   justifyContent="center"
                   alignItems="center"
                 >
-                  <Text color="$white" fontWeight="bold">
-
-                  </Text>
+                  <Text color="$white" fontWeight="bold"></Text>
                 </Pressable>
               </HStack>
 
@@ -301,7 +298,7 @@ export default function SignInScreen() {
                 )}
               </Button>
 
-              <HStack justifyContent="center" mt="$2">
+              <HStack justifyContent="center" mb="$2">
                 <Text color="$textLight600">Don't have an Account? </Text>
                 <Pressable onPress={() => router.push("/sign-up")}>
                   <Text color="#E86673" fontWeight="$bold">

@@ -1,41 +1,35 @@
+import { useUserSearchQuery } from "@/lib/queries"; // <-- Import Hook
 import {
-    Box,
-    Divider,
-    HStack,
-    Input,
-    InputField,
-    InputSlot,
-    Pressable,
-    ScrollView,
-    Text,
-    VStack,
+  Box,
+  Divider,
+  HStack,
+  Input,
+  InputField,
+  InputSlot,
+  Pressable,
+  ScrollView,
+  Spinner,
+  Text,
+  VStack,
 } from "@gluestack-ui/themed";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-// Mock Data
-const SEARCH_RESULTS = [
-  {
-    id: 1,
-    name: "Princess",
-    age: 26,
-    verified: true,
-    tags: ["Singing", "Anime Fan", "+5"],
-  },
-  {
-    id: 2,
-    name: "Pricia",
-    age: 24,
-    verified: true,
-    tags: ["Singing", "Anime Fan", "+5"],
-  },
-];
 
 export default function SearchScreen() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+
+  // Debounce the search input so it doesn't spam your API on every keystroke
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery), 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Fetch results using the debounced query
+  const { data: searchResults, isLoading } = useUserSearchQuery(debouncedQuery);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
@@ -55,17 +49,12 @@ export default function SearchScreen() {
           right={24}
           onPress={() => router.back()}
           p="$2"
-          borderWidth={1}
-          borderColor="$borderLight300"
-          borderRadius="$full"
-          w={32}
-          h={32}
-          justifyContent="center"
-          alignItems="center"
         >
-          <Text size="sm" color="#1A1A1A" fontWeight="bold">
-            ✕
-          </Text>
+          <Image
+            source={require("@/assets/images/VectorCancel.png")}
+            style={{ width: 19, height: 19 }}
+            contentFit="contain"
+          />
         </Pressable>
       </Box>
 
@@ -77,10 +66,13 @@ export default function SearchScreen() {
           borderRadius="$full"
           borderColor={searchQuery ? "#E86673" : "$borderLight400"}
           borderWidth={1}
-          bg="#FFFFFF"
         >
           <InputSlot pl="$4">
-            <Text size="lg">🔍</Text>
+            <Image
+              source={require("@/assets/images/icon-search.png")}
+              style={{ width: 19, height: 19 }}
+              contentFit="contain"
+            />
           </InputSlot>
           <InputField
             placeholder="Search for a match"
@@ -92,24 +84,41 @@ export default function SearchScreen() {
 
         {/* Results List */}
         <ScrollView mt="$6" showsVerticalScrollIndicator={false}>
-          {searchQuery.length > 0 &&
-            SEARCH_RESULTS.map((user, index) => (
+          {isLoading ? (
+            <Box py="$10" alignItems="center">
+              <Spinner size="large" color="#E86673" />
+            </Box>
+          ) : searchResults && searchResults.length > 0 ? (
+            searchResults.map((user, index) => (
               <Box key={user.id}>
+                {/* Pass the User ID to the profile detail screen! */}
                 <Pressable
-                  onPress={() => router.push("/profile-detail")}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/profile-detail",
+                      params: { id: user.id },
+                    })
+                  }
                   py="$4"
                 >
                   <HStack space="md" alignItems="center">
-                    {/* Avatar */}
-                    <Box w={48} h={48} borderRadius="$full" overflow="hidden">
+                    <Box
+                      w={48}
+                      h={48}
+                      borderRadius="$full"
+                      overflow="hidden"
+                      bg="#F7F5F4"
+                    >
                       <Image
-                        source={require("@/assets/images/react-logo.png")} // Placeholder
+                        source={{
+                          uri:
+                            user.avatar ||
+                            "https://ui-avatars.com/api/?name=" + user.fullName,
+                        }}
                         style={{ width: "100%", height: "100%" }}
                         contentFit="cover"
                       />
                     </Box>
-
-                    {/* Info */}
                     <VStack space="xs">
                       <HStack alignItems="center" space="xs">
                         <Text
@@ -117,13 +126,13 @@ export default function SearchScreen() {
                           fontWeight="$bold"
                           color="$textLight900"
                         >
-                          {user.name}, {user.age}
+                          {user.fullName}
                         </Text>
-                        {user.verified && <Text>✅</Text>}
+                        {user.isVerified && <Text>✅</Text>}
                       </HStack>
-
                       <HStack space="sm">
-                        {user.tags.map((tag) => (
+                        {/* Display first 2 interests as tags if available */}
+                        {user.interests?.slice(0, 2).map((tag) => (
                           <Box
                             key={tag}
                             bg="#F7F5F4"
@@ -144,11 +153,16 @@ export default function SearchScreen() {
                     </VStack>
                   </HStack>
                 </Pressable>
-                {index < SEARCH_RESULTS.length - 1 && (
+                {index < searchResults.length - 1 && (
                   <Divider bg="$borderLight200" />
                 )}
               </Box>
-            ))}
+            ))
+          ) : debouncedQuery ? (
+            <Box py="$10" alignItems="center">
+              <Text color="$textLight500">No users found.</Text>
+            </Box>
+          ) : null}
         </ScrollView>
       </VStack>
     </SafeAreaView>

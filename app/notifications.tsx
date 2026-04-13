@@ -1,40 +1,37 @@
-import { IconSymbol } from "@/components/ui/icon-symbol";
+import { PRIMARY_COLOR } from "@/constants/theme";
 import {
-    Box,
-    Divider,
-    HStack,
-    Pressable,
-    ScrollView,
-    Text,
-    VStack,
+  useMarkNotificationReadMutation,
+  useNotificationListQuery,
+} from "@/lib/queries";
+import {
+  Box,
+  Divider,
+  HStack,
+  Pressable,
+  ScrollView,
+  Spinner,
+  Text,
+  VStack,
 } from "@gluestack-ui/themed";
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-// Mock Data
-const NOTIFICATIONS = [
-  {
-    id: 1,
-    type: "match",
-    title: "You have a new match",
-    message: "Patrica as what you search for, start of a conversation now",
-    actionText: "View Patrica Profile",
-    iconBg: "#FFE5B4",
-    iconColor: "#FFA500",
-  },
-  {
-    id: 2,
-    type: "system",
-    title: "Welcome to love built",
-    message: "We have setup matches based on your preferences",
-    actionText: "View Matches",
-    iconBg: "#9999FF",
-    iconColor: "#4B0082",
-  },
-];
-
 export default function NotificationsScreen() {
   const router = useRouter();
+
+  const { data: notifications, isLoading, error } = useNotificationListQuery();
+  const markReadMutation = useMarkNotificationReadMutation();
+
+  const handleNotificationPress = (notification: any) => {
+    // Mark as read if it isn't already
+    if (!notification.isRead) {
+      markReadMutation.mutate(notification.id);
+    }
+
+    // Logic to route based on notification type
+    // e.g. if (notification.type === 'match') router.push('/matches');
+  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
@@ -59,71 +56,124 @@ export default function NotificationsScreen() {
           justifyContent="center"
           alignItems="center"
         >
-          <IconSymbol name="chevron.left" size={20} color="#1A1A1A" />
+          <Image
+            source={require("@/assets/images/ArrowLeft.png")}
+            style={{ width: 16, height: 16 }}
+            contentFit="contain"
+          />
         </Pressable>
         <Text size="xl" fontWeight="$bold" color="$textLight900">
           Notifications
         </Text>
       </Box>
 
-      <ScrollView flex={1} mt="$4">
-        {NOTIFICATIONS.map((notif, index) => (
-          <Box key={notif.id}>
-            <HStack px="$6" py="$5" space="md" alignItems="flex-start">
-              {/* Icon Bubble */}
-              <Box
-                w={48}
-                h={48}
-                borderRadius="$full"
-                bg={notif.iconBg}
-                justifyContent="center"
-                alignItems="center"
-              >
-                <Text color={notif.iconColor} size="xl">
-                  ♥
-                </Text>
-                {/* Use appropriate IconSymbol here */}
-              </Box>
-
-              {/* Content */}
-              <VStack flex={1} space="xs">
-                <Text size="md" fontWeight="$bold" color="$textLight900">
-                  {notif.title}
-                </Text>
-                <Text size="sm" color="$textLight500" lineHeight="$sm">
-                  {notif.message}
-                </Text>
-
-                {/* Action Button */}
+      <ScrollView flex={1} showsVerticalScrollIndicator={false}>
+        <VStack px="$6" pt="$4" space="lg" pb="$10">
+          {isLoading ? (
+            <Box py="$10" alignItems="center">
+              <Spinner size="large" color={PRIMARY_COLOR} />
+            </Box>
+          ) : error ? (
+            <Box py="$10" alignItems="center">
+              <Text color="$textLight500">Failed to load notifications.</Text>
+            </Box>
+          ) : notifications && notifications.length > 0 ? (
+            notifications.map((item, index) => (
+              <Box key={item.id}>
                 <Pressable
-                  mt="$2"
-                  onPress={() =>
-                    router.push(
-                      notif.type === "match"
-                        ? "/profile-detail"
-                        : "/(tabs)/matches",
-                    )
-                  }
+                  py="$2"
+                  onPress={() => handleNotificationPress(item)}
                 >
-                  <Box
-                    bg="#FFF0F2"
-                    px="$4"
-                    py="$2"
-                    borderRadius="$full"
-                    alignSelf="flex-start"
+                  <HStack
+                    space="md"
+                    alignItems="center"
+                    opacity={item.isRead ? 0.6 : 1}
                   >
-                    <Text color="#E86673" fontWeight="$medium" size="sm">
-                      {notif.actionText}
-                    </Text>
-                  </Box>
+                    {/* Notification Icon/Avatar */}
+                    <Box
+                      w={48}
+                      h={48}
+                      borderRadius="$full"
+                      bg={item.isRead ? "#F7F5F4" : "#FFF0F2"}
+                      justifyContent="center"
+                      alignItems="center"
+                      overflow="hidden"
+                    >
+                      {item.avatar ? (
+                        <Image
+                          source={{ uri: item.avatar }}
+                          style={{ width: "100%", height: "100%" }}
+                          contentFit="cover"
+                        />
+                      ) : (
+                        <Image
+                          source={require("@/assets/images/icon-bell.png")}
+                          style={{ width: 24, height: 24 }}
+                          contentFit="contain"
+                          tintColor={item.isRead ? "#666" : PRIMARY_COLOR}
+                        />
+                      )}
+                    </Box>
+
+                    {/* Content */}
+                    <VStack flex={1} space="xs">
+                      <HStack
+                        justifyContent="space-between"
+                        alignItems="center"
+                      >
+                        <Text
+                          size="md"
+                          fontWeight="$bold"
+                          color="$textLight900"
+                        >
+                          {item.title || "Alert"}
+                        </Text>
+                        <Text size="xs" color="$textLight500">
+                          {/* Assuming backend sends an ISO string */}
+                          {item.createdAt
+                            ? new Date(item.createdAt).toLocaleDateString()
+                            : "Now"}
+                        </Text>
+                      </HStack>
+                      <Text size="sm" color="$textLight600" numberOfLines={2}>
+                        {item.message}
+                      </Text>
+                    </VStack>
+
+                    {/* Unread dot */}
+                    {!item.isRead && (
+                      <Box
+                        w={8}
+                        h={8}
+                        borderRadius="$full"
+                        bg={PRIMARY_COLOR}
+                      />
+                    )}
+                  </HStack>
                 </Pressable>
-              </VStack>
-            </HStack>
-            {index < NOTIFICATIONS.length - 1 && (
-              <Divider bg="$borderLight100" />
-            )}
-          </Box>
-        ))}
+                {index < notifications.length - 1 && (
+                  <Divider bg="$borderLight100" mt="$4" />
+                )}
+              </Box>
+            ))
+          ) : (
+            <Box py="$20" alignItems="center">
+              <Image
+                source={require("@/assets/images/icon-bell.png")}
+                style={{
+                  width: 60,
+                  height: 60,
+                  opacity: 0.3,
+                  marginBottom: 16,
+                }}
+                contentFit="contain"
+              />
+              <Text color="$textLight500" size="lg" textAlign="center">
+                You have no notifications right now.
+              </Text>
+            </Box>
+          )}
+        </VStack>
       </ScrollView>
     </SafeAreaView>
   );

@@ -10,6 +10,7 @@ import {
   Text,
   VStack,
 } from "@gluestack-ui/themed";
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Platform, Switch } from "react-native";
@@ -59,17 +60,16 @@ export default function FilterModalScreen() {
           right={24}
           onPress={() => router.back()}
           p="$2"
-          borderWidth={1}
-          borderColor="$borderLight300"
-          borderRadius="$full"
           w={32}
           h={32}
           justifyContent="center"
           alignItems="center"
         >
-          <Text size="sm" color="#1A1A1A" fontWeight="bold">
-            ✕
-          </Text>
+          <Image
+            source={require("@/assets/images/VectorCancel.png")}
+            style={{ width: 19.13, height: 19.13 }}
+            contentFit="contain"
+          />
         </Pressable>
       </Box>
 
