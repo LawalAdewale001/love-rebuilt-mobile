@@ -1,5 +1,7 @@
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { OnboardingHeader } from "@/components/ui/onboarding-header";
+import { showToast } from "@/components/ui/toast";
+import { useUpdateProfileMutation } from "@/lib/queries";
 import {
   Actionsheet,
   ActionsheetBackdrop,
@@ -10,6 +12,7 @@ import {
   ActionsheetItemText,
   Box,
   Button,
+  ButtonSpinner,
   ButtonText,
   Divider,
   Input,
@@ -33,12 +36,30 @@ const IDENTITY_OPTIONS = [
 
 export default function IdentityScreen() {
   const router = useRouter();
+  const updateMutation = useUpdateProfileMutation();
+
   const [isOpen, setIsOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
 
   const handleSelect = (option: string) => {
     setSelected(option);
     setIsOpen(false);
+  };
+
+  const handleContinue = () => {
+    if (!selected) return;
+    updateMutation.mutate(
+      { identity: selected },
+      {
+        onSuccess: () => router.push("/religion"),
+        onError: (err: any) =>
+          showToast(
+            "error",
+            "Error",
+            err?.message || "Failed to save identity",
+          ),
+      },
+    );
   };
 
   return (
@@ -71,12 +92,14 @@ export default function IdentityScreen() {
               pointerEvents="none"
             />
             <InputSlot pr="$4">
-              <IconSymbol
-                name="chevron.right"
-                size={20}
-                color="#1A1A1A"
-                style={{ transform: [{ rotate: "90deg" }] }}
-              />
+              <Box>
+                <IconSymbol
+                  name="chevron.right"
+                  size={20}
+                  color="#1A1A1A"
+                  style={{ transform: [{ rotate: "90deg" }] }}
+                />
+              </Box>
             </InputSlot>
           </Input>
         </Pressable>
@@ -86,7 +109,7 @@ export default function IdentityScreen() {
             source={require("@/assets/images/identity-graphic.png")}
             style={{
               width: 500,
-              height: 541.3101196289062,
+              height: 541.31,
               position: "absolute",
               left: -70,
               top: 80,
@@ -101,8 +124,8 @@ export default function IdentityScreen() {
             borderRadius="$full"
             mt="auto"
             mb="$4"
-            disabled={!selected}
-            onPress={() => router.push("/religion")}
+            disabled={!selected || updateMutation.isPending}
+            onPress={handleContinue}
             style={
               selected
                 ? {
@@ -115,12 +138,16 @@ export default function IdentityScreen() {
                 : {}
             }
           >
-            <ButtonText
-              fontWeight="$bold"
-              color={selected ? "#1A1A1A" : "$textLight400"}
-            >
-              Continue
-            </ButtonText>
+            {updateMutation.isPending ? (
+              <ButtonSpinner color="#1A1A1A" />
+            ) : (
+              <ButtonText
+                fontWeight="$bold"
+                color={selected ? "#1A1A1A" : "$textLight400"}
+              >
+                Continue
+              </ButtonText>
+            )}
           </Button>
         </Box>
       </VStack>

@@ -7,6 +7,7 @@ export enum MessageType {
   AUDIO = 'audio',
   FILE = 'file',
   MEETUP = 'meetup',
+  MISSED_CALL = 'missed_call',
 }
 
 export type ChatMessage = {
@@ -17,6 +18,8 @@ export type ChatMessage = {
   createdAt: string;
   read?: boolean;
   sender?: string;
+  senderId?: string;
+  senderAvatar?: string | null;
   replyTo?: { id: string; text?: string; sender?: string; type?: MessageType };
   edited?: boolean;
   deleted?: boolean;

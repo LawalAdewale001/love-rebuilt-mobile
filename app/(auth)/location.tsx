@@ -34,7 +34,6 @@ export default function LocationScreen() {
   const [selectedLocation, setSelectedLocation] = useState("");
   const [fetchCurrent, setFetchCurrent] = useState(false);
 
-  // Debounce typing to avoid spamming the API
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(searchQuery), 500);
     return () => clearTimeout(timer);
@@ -45,7 +44,6 @@ export default function LocationScreen() {
   const { data: currentLocData, isFetching: isFetchingCurrent } =
     useCurrentLocationQuery(fetchCurrent);
 
-  // When GPS API returns, set it and stop fetching
   useEffect(() => {
     if (currentLocData?.location) {
       setSelectedLocation(currentLocData.location);
@@ -69,6 +67,20 @@ export default function LocationScreen() {
           ),
       },
     );
+  };
+
+  // Helper to format the display name if the backend returns an object
+  // Adjust this based on your exact backend response schema!
+  const formatLocationDisplay = (loc: any) => {
+    if (typeof loc === "string") return loc;
+
+    // If backend returns distinct fields:
+    if (loc.city && loc.state && loc.country) {
+      return `${loc.city}, ${loc.state}, ${loc.country}`;
+    }
+
+    // Fallback to name or formatted address
+    return loc.formattedAddress || loc.name || "Unknown Location";
   };
 
   return (
@@ -97,7 +109,7 @@ export default function LocationScreen() {
             />
           </InputSlot>
           <InputField
-            placeholder="E.g. Lagos, Nigeria"
+            placeholder="E.g. Lagos, Nigeria or London, UK"
             value={searchQuery}
             onChangeText={(text) => {
               setSearchQuery(text);
@@ -134,10 +146,23 @@ export default function LocationScreen() {
             )}
 
             {!isLoading &&
+              searchResults &&
+              searchResults.length === 0 &&
+              debouncedQuery.length > 2 && (
+                <Text color="$textLight500" textAlign="center">
+                  No locations found in Nigeria or the UK.
+                </Text>
+              )}
+
+            {!isLoading &&
               searchResults?.map((loc: any, i: number) => {
-                // Assuming backend returns an object with a 'name' or 'formattedAddress'. Adjust based on actual API!
-                const locName = loc.name || loc.formattedAddress || loc;
+                const locName = formatLocationDisplay(loc);
                 const isSelected = selectedLocation === locName;
+
+                // Split for UI display: "City" on top, "State, Country" below
+                const parts = locName.split(",");
+                const mainTitle = parts[0];
+                const subtitle = parts.slice(1).join(",").trim();
 
                 return (
                   <Pressable
@@ -158,11 +183,13 @@ export default function LocationScreen() {
                           fontWeight="$medium"
                           color={isSelected ? "#E86673" : "$textLight900"}
                         >
-                          {locName.split(",")[0]}
+                          {mainTitle}
                         </Text>
-                        <Text color="$textLight500" size="sm">
-                          {locName}
-                        </Text>
+                        {subtitle ? (
+                          <Text color="$textLight500" size="sm">
+                            {subtitle}
+                          </Text>
+                        ) : null}
                       </VStack>
                     </HStack>
                   </Pressable>

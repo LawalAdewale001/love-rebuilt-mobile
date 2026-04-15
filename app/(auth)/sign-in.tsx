@@ -1,3 +1,10 @@
+import { showToast } from "@/components/ui/toast";
+import { useForm } from "@/hooks/use-form";
+import { ApiError, apiClient } from "@/lib/api-client";
+import { registerForPushNotifications } from "@/lib/push-notifications";
+import { useLoginMutation, useSocialLoginMutation } from "@/lib/queries";
+import { connectSocket } from "@/lib/socket";
+import { Ionicons } from "@expo/vector-icons";
 import {
   Box,
   Button,
@@ -9,6 +16,7 @@ import {
   InputField,
   InputSlot,
   Pressable,
+  Spinner,
   Text,
   VStack,
 } from "@gluestack-ui/themed";
@@ -17,13 +25,6 @@ import { useRouter } from "expo-router";
 import Joi from "joi";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView } from "react-native";
-
-import { showToast } from "@/components/ui/toast";
-import { useForm } from "@/hooks/use-form";
-import { ApiError } from "@/lib/api-client";
-import { registerForPushNotifications } from "@/lib/push-notifications";
-import { useLoginMutation } from "@/lib/queries";
-import { connectSocket } from "@/lib/socket";
 
 const loginSchema = Joi.object({
   email: Joi.string()
@@ -42,19 +43,24 @@ const loginSchema = Joi.object({
 export default function SignInScreen() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
+
   const loginMutation = useLoginMutation();
+  const socialLoginMutation = useSocialLoginMutation();
 
   const form = useForm({ email: "", password: "" }, loginSchema);
 
   const isFormFilled =
     form.values.email.trim().length > 0 &&
     form.values.password.trim().length > 0;
-  const canSubmit = isFormFilled && !loginMutation.isPending;
+
+  // Disable regular submit if ANY mutation is running
+  const isAnyLoading = loginMutation.isPending || socialLoginMutation.isPending;
+  const canSubmit = isFormFilled && !isAnyLoading;
 
   const emailError = form.getError("email");
   const passwordError = form.getError("password");
 
-  const handleSignIn = async () => {
+  const handleSignIn = () => {
     const validated = form.validate();
     if (!validated) {
       const firstError = form.fieldErrors.email ?? form.fieldErrors.password;
@@ -62,19 +68,21 @@ export default function SignInScreen() {
       return;
     }
 
-    // Get push token before login so we can send it with credentials
-    const pushToken = await registerForPushNotifications();
+    const pushTokenPromise = registerForPushNotifications();
 
     loginMutation.mutate(
-      {
-        email: validated.email,
-        password: validated.password,
-        devicePushToken: pushToken ?? undefined,
-      },
+      { email: validated.email, password: validated.password },
       {
         onSuccess: () => {
           connectSocket();
           router.replace("/(tabs)");
+          pushTokenPromise.then((token) => {
+            if (token) {
+              apiClient
+                .patch("/api/user/update", { devicePushToken: token })
+                .catch(() => {});
+            }
+          });
         },
         onError: (error) => {
           const message =
@@ -85,6 +93,56 @@ export default function SignInScreen() {
         },
       },
     );
+  };
+
+  const handleSocialLogin = async (provider: "google" | "apple") => {
+    try {
+      let token = "";
+
+      if (provider === "google") {
+        // TODO: Await your Google Sign-In library execution here to extract the ID token
+        // Example:
+        // await GoogleSignin.hasPlayServices();
+        // const userInfo = await GoogleSignin.signIn();
+        // token = userInfo.idToken;
+      } else {
+        // TODO: Await your Apple Sign-In library execution here to extract the identityToken
+        // Example:
+        // const credential = await AppleAuthentication.signInAsync({ requestedScopes: [...] });
+        // token = credential.identityToken;
+      }
+
+      if (!token) return; // User cancelled the flow
+
+      const pushTokenPromise = registerForPushNotifications();
+
+      socialLoginMutation.mutate(
+        { provider, token },
+        {
+          onSuccess: () => {
+            connectSocket();
+            router.replace("/(tabs)");
+            pushTokenPromise.then((pushToken) => {
+              if (pushToken) {
+                apiClient
+                  .patch("/api/user/update", { devicePushToken: pushToken })
+                  .catch(() => {});
+              }
+            });
+          },
+          onError: (error) => {
+            const message =
+              error instanceof ApiError
+                ? error.message
+                : `Failed to sign in with ${provider}.`;
+            showToast("error", "Authentication Failed", message);
+          },
+        },
+      );
+    } catch (error) {
+      // Handles cases where the user dismisses the native social login modal
+      console.log(`${provider} login cancelled or failed natively:`, error);
+    }
   };
 
   return (
@@ -241,7 +299,7 @@ export default function SignInScreen() {
                 <Divider flex={1} />
               </HStack>
 
-              {/* Social Login placeholders */}
+              {/* Social Login Buttons */}
               <HStack justifyContent="center" space="lg">
                 <Pressable
                   w={50}
@@ -252,19 +310,41 @@ export default function SignInScreen() {
                   borderColor="$borderLight200"
                   justifyContent="center"
                   alignItems="center"
+                  onPress={() => handleSocialLogin("google")}
+                  disabled={isAnyLoading}
                 >
-                  <Text fontWeight="bold">G</Text>
+                  {socialLoginMutation.isPending &&
+                  socialLoginMutation.variables?.provider === "google" ? (
+                    <Spinner size="small" color="#1A1A1A" />
+                  ) : (
+                    <Image
+                      source={{
+                        uri: "https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg",
+                      }}
+                      style={{ width: 24, height: 24 }}
+                    />
+                  )}
                 </Pressable>
-                <Pressable
-                  w={50}
-                  h={50}
-                  bg="$textLight900"
-                  borderRadius="$full"
-                  justifyContent="center"
-                  alignItems="center"
-                >
-                  <Text color="$white" fontWeight="bold"></Text>
-                </Pressable>
+
+                {Platform.OS === "ios" && (
+                  <Pressable
+                    w={50}
+                    h={50}
+                    bg="$textLight900"
+                    borderRadius="$full"
+                    justifyContent="center"
+                    alignItems="center"
+                    onPress={() => handleSocialLogin("apple")}
+                    disabled={isAnyLoading}
+                  >
+                    {socialLoginMutation.isPending &&
+                    socialLoginMutation.variables?.provider === "apple" ? (
+                      <Spinner size="small" color="#FFFFFF" />
+                    ) : (
+                      <Ionicons name="logo-apple" size={24} color="#FFFFFF" />
+                    )}
+                  </Pressable>
+                )}
               </HStack>
 
               <Button
@@ -300,7 +380,10 @@ export default function SignInScreen() {
 
               <HStack justifyContent="center" mb="$2">
                 <Text color="$textLight600">Don't have an Account? </Text>
-                <Pressable onPress={() => router.push("/sign-up")}>
+                <Pressable
+                  onPress={() => router.push("/sign-up")}
+                  disabled={isAnyLoading}
+                >
                   <Text color="#E86673" fontWeight="$bold">
                     Create an Account
                   </Text>

@@ -1,5 +1,7 @@
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { OnboardingHeader } from "@/components/ui/onboarding-header";
+import { showToast } from "@/components/ui/toast";
+import { useUpdateProfileMutation } from "@/lib/queries";
 import {
   Actionsheet,
   ActionsheetBackdrop,
@@ -10,6 +12,7 @@ import {
   ActionsheetItemText,
   Box,
   Button,
+  ButtonSpinner,
   ButtonText,
   Divider,
   Input,
@@ -35,12 +38,26 @@ const TRIBE_OPTIONS = [
 
 export default function TribeScreen() {
   const router = useRouter();
+  const updateMutation = useUpdateProfileMutation();
+
   const [isOpen, setIsOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
 
   const handleSelect = (option: string) => {
     setSelected(option);
     setIsOpen(false);
+  };
+
+  const handleContinue = () => {
+    if (!selected) return;
+    updateMutation.mutate(
+      { tribe: selected },
+      {
+        onSuccess: () => router.push("/relationship-goal"),
+        onError: (err: any) =>
+          showToast("error", "Error", err?.message || "Failed to save tribe"),
+      },
+    );
   };
 
   return (
@@ -73,12 +90,14 @@ export default function TribeScreen() {
               pointerEvents="none"
             />
             <InputSlot pr="$4">
-              <IconSymbol
-                name="chevron.right"
-                size={20}
-                color="#1A1A1A"
-                style={{ transform: [{ rotate: "90deg" }] }}
-              />
+              <Box>
+                <IconSymbol
+                  name="chevron.right"
+                  size={20}
+                  color="#1A1A1A"
+                  style={{ transform: [{ rotate: "90deg" }] }}
+                />
+              </Box>
             </InputSlot>
           </Input>
         </Pressable>
@@ -96,15 +115,14 @@ export default function TribeScreen() {
             contentFit="contain"
           />
 
-          {/* Per your design, the active button here is White */}
           <Button
             w="100%"
             size="xl"
             bg={selected ? "#FFFFFF" : "#F4F3F2"}
             borderRadius="$full"
             mt="auto"
-            disabled={!selected}
-            onPress={() => router.push("/relationship-goal")}
+            disabled={!selected || updateMutation.isPending}
+            onPress={handleContinue}
             style={
               selected
                 ? {
@@ -117,12 +135,16 @@ export default function TribeScreen() {
                 : {}
             }
           >
-            <ButtonText
-              fontWeight="$bold"
-              color={selected ? "#1A1A1A" : "$textLight400"}
-            >
-              Continue
-            </ButtonText>
+            {updateMutation.isPending ? (
+              <ButtonSpinner color="#1A1A1A" />
+            ) : (
+              <ButtonText
+                fontWeight="$bold"
+                color={selected ? "#1A1A1A" : "$textLight400"}
+              >
+                Continue
+              </ButtonText>
+            )}
           </Button>
         </Box>
       </VStack>

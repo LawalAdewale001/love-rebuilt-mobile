@@ -59,6 +59,26 @@ export function useLoginMutation() {
   });
 }
 
+// ─── Social Login mutation
+export type SocialLoginRequest = {
+  provider: "google" | "apple";
+  token: string; // The identity token (JWT) returned from Google/Apple
+  devicePushToken?: string;
+};
+
+export function useSocialLoginMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: SocialLoginRequest) =>
+      // Adjust this URL to exactly match your Swagger doc (e.g., "/api/auth/google" or "/api/auth/social")
+      apiClient.post<LoginResponse>("/api/auth/social-login", data),
+    onSuccess: async (response) => {
+      await setAuth(response.accessToken, response.user);
+      queryClient.invalidateQueries({ queryKey: queryKeys.all });
+    },
+  });
+}
+
 // ─── User profile
 export type UserProfile = {
   id: string;
@@ -230,6 +250,7 @@ export type ChatMessage = {
   replyToId: string | null;
   isRead: boolean;
   isDeleted: boolean;
+  isEdited: boolean;
   meetupId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -509,35 +530,39 @@ export function useUpdateProfileMutation() {
   });
 }
 
+// --- Discovery Endpoints ---
 export function useDiscoveryGeneralQuery(
   filter: "forYou" | "nearby" = "forYou",
 ) {
   return useQuery({
     queryKey: ["discoveryGeneral", filter],
-    // Pass the filter as a query param so the backend knows what to return
     queryFn: async () => {
-      // Assuming your apiClient returns the raw JSON.
-      // Adjust the params key based on what your Swagger UI specifies (e.g., 'type', 'sort', or 'filter')
       const response = await apiClient.get<any>("/api/discovery/general", {
-        params: { filter },
+        params: { page: 1, limit: 20, filter }, // Added pagination params to match your swagger
       });
-      return response;
+      // Extract the array directly so the UI doesn't have to guess
+      return response?.data?.result || response?.result || [];
     },
   });
 }
 
 export function useDiscoveryMatchesQuery() {
   return useQuery({
-    // queryKey: queryKeys.discoveryMatches(),
     queryKey: ["discoveryMatches"],
-    queryFn: () => apiClient.get<UserProfile[]>("/api/discovery/matches"),
+    queryFn: async () => {
+      const response = await apiClient.get<any>("/api/discovery/matches", {
+        params: { page: 1, limit: 20 },
+      });
+      // Extract the array directly
+      return response?.data?.result || response?.result || [];
+    },
   });
 }
 
 export function useRecordInteractionMutation() {
   return useMutation({
-    // Assuming the payload requires the target user's ID and the action ('like' or 'pass')
-    mutationFn: (data: { targetUserId: string; action: "like" | "pass" }) =>
+    // Changed "action" to "type" to match standard API definitions
+    mutationFn: (data: { targetUserId: string; type: "like" | "pass" }) =>
       apiClient.post("/api/discovery/interaction", data),
   });
 }
@@ -569,8 +594,15 @@ export function useLocationSearchQuery(query: string) {
   return useQuery({
     queryKey: ["locationSearch", query],
     queryFn: () =>
-      apiClient.get<any[]>(`/api/location/search`, { params: { query } }),
-    enabled: query.trim().length > 2, // Only trigger if they typed at least 3 characters
+      apiClient.get<any[]>(`/api/location/search`, {
+        params: {
+          query,
+          // Assuming the backend can accept a 'countries' parameter
+          // "NG" is Nigeria, "GB" is United Kingdom (ISO 3166-1 alpha-2 codes)
+          countries: "NG,GB",
+        },
+      }),
+    enabled: query.trim().length > 2,
   });
 }
 
@@ -598,5 +630,69 @@ export function useMarkNotificationReadMutation() {
       apiClient.patch(`/api/notification/${id}/read`),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+}
+
+// ─── Learn / Mini-Courses Endpoints ─────────────────────────────────────
+
+export type MiniCourse = {
+  id: string;
+  title: string;
+  description: string;
+  videoUrl: string;
+  thumbnailUrl: string;
+  duration: string;
+  categoryId: string;
+};
+
+export type CourseCategory = {
+  id: string;
+  name: string;
+  miniCourses: MiniCourse[];
+};
+// 1. Fetch all mini-courses (List)
+export function useMiniCoursesQuery() {
+  return useQuery({
+    queryKey: ["miniCourses"],
+    queryFn: async () => {
+      // FIX: Updated the endpoint to match your actual Swagger URL
+      const response = await apiClient.get<any>(
+        "/api/mini-courses/categories",
+        {
+          params: { page: 1, limit: 10 },
+        },
+      );
+
+      return response?.data?.result || response?.result || response;
+    },
+  });
+}
+
+// 2. Fetch a specific mini-course by ID
+export function useMiniCourseByIdQuery(id: string) {
+  return useQuery({
+    queryKey: ["miniCourse", id],
+    queryFn: async () => {
+      // NOTE: Make sure this URL matches your Swagger for fetching a single course.
+      // It might be "/api/mini-courses/courses/${id}" depending on your backend routing.
+      const response = await apiClient.get<any>(`/api/mini-course/${id}`);
+      return response?.data?.result || response?.result || response;
+    },
+    enabled: !!id,
+  });
+}
+
+// 3. Update Progress / Mark as Complete (Assuming this exists based on common LMS flows)
+
+export function useCompleteMiniCourseMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiClient.post(`/api/mini-course/${id}/complete`), // Adjust URL if different in Swagger
+    onSuccess: (_, id) => {
+      // Invalidate both the list and the specific course so the UI updates instantly
+      queryClient.invalidateQueries({ queryKey: ["miniCourses"] });
+      queryClient.invalidateQueries({ queryKey: ["miniCourse", id] });
+    },
   });
 }

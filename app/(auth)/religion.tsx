@@ -1,6 +1,7 @@
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { OnboardingHeader } from "@/components/ui/onboarding-header";
-
+import { showToast } from "@/components/ui/toast";
+import { useUpdateProfileMutation } from "@/lib/queries";
 import {
   Actionsheet,
   ActionsheetBackdrop,
@@ -11,6 +12,7 @@ import {
   ActionsheetItemText,
   Box,
   Button,
+  ButtonSpinner,
   ButtonText,
   Divider,
   Input,
@@ -35,12 +37,30 @@ const RELIGION_OPTIONS = [
 
 export default function ReligionScreen() {
   const router = useRouter();
+  const updateMutation = useUpdateProfileMutation();
+
   const [isOpen, setIsOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
 
   const handleSelect = (option: string) => {
     setSelected(option);
     setIsOpen(false);
+  };
+
+  const handleContinue = () => {
+    if (!selected) return;
+    updateMutation.mutate(
+      { religion: selected },
+      {
+        onSuccess: () => router.push("/tribe"),
+        onError: (err: any) =>
+          showToast(
+            "error",
+            "Error",
+            err?.message || "Failed to save religion",
+          ),
+      },
+    );
   };
 
   return (
@@ -73,12 +93,14 @@ export default function ReligionScreen() {
               pointerEvents="none"
             />
             <InputSlot pr="$4">
-              <IconSymbol
-                name="chevron.right"
-                size={20}
-                color="#1A1A1A"
-                style={{ transform: [{ rotate: "90deg" }] }}
-              />
+              <Box>
+                <IconSymbol
+                  name="chevron.right"
+                  size={20}
+                  color="#1A1A1A"
+                  style={{ transform: [{ rotate: "90deg" }] }}
+                />
+              </Box>
             </InputSlot>
           </Input>
         </Pressable>
@@ -102,8 +124,8 @@ export default function ReligionScreen() {
             bg={selected ? "#FFFFFF" : "#F4F3F2"}
             borderRadius="$full"
             mt="auto"
-            disabled={!selected}
-            onPress={() => router.push("/tribe")}
+            disabled={!selected || updateMutation.isPending}
+            onPress={handleContinue}
             style={
               selected
                 ? {
@@ -116,12 +138,16 @@ export default function ReligionScreen() {
                 : {}
             }
           >
-            <ButtonText
-              fontWeight="$bold"
-              color={selected ? "#1A1A1A" : "$textLight400"}
-            >
-              Continue
-            </ButtonText>
+            {updateMutation.isPending ? (
+              <ButtonSpinner color="#1A1A1A" />
+            ) : (
+              <ButtonText
+                fontWeight="$bold"
+                color={selected ? "#1A1A1A" : "$textLight400"}
+              >
+                Continue
+              </ButtonText>
+            )}
           </Button>
         </Box>
       </VStack>

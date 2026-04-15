@@ -1,120 +1,139 @@
-import { Box, HStack, Pressable, Text, VStack } from "@gluestack-ui/themed";
-import { Image } from "expo-image";
-import { useRouter } from "expo-router";
+import { showToast } from "@/components/ui/toast";
+import {
+  useCompleteMiniCourseMutation,
+  useMiniCourseByIdQuery,
+} from "@/lib/queries";
+import { Ionicons } from "@expo/vector-icons";
+import {
+  Box,
+  Button,
+  ButtonSpinner,
+  ButtonText,
+  Pressable,
+  Spinner,
+  Text,
+  VStack,
+} from "@gluestack-ui/themed";
+import { ResizeMode, Video } from "expo-av";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useRef, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function VideoPlayerScreen() {
   const router = useRouter();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const videoRef = useRef<Video>(null);
+
+  const { data: course, isLoading } = useMiniCourseByIdQuery(id);
+  const completeMutation = useCompleteMiniCourseMutation();
+
+  const [hasFinished, setHasFinished] = useState(false);
+
+  const handlePlaybackStatusUpdate = (status: any) => {
+    if (status.didJustFinish && !hasFinished) {
+      setHasFinished(true);
+    }
+  };
+
+  const handleComplete = () => {
+    completeMutation.mutate(id, {
+      onSuccess: () => {
+        // Navigate to the completion success screen!
+        router.replace("/course-completed");
+      },
+      onError: (err: any) => {
+        showToast(
+          "error",
+          "Error",
+          err?.message || "Could not mark as complete",
+        );
+      },
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView
+        style={{ flex: 1, backgroundColor: "#000", justifyContent: "center" }}
+      >
+        <Spinner size="large" color="#E86673" />
+      </SafeAreaView>
+    );
+  }
 
   return (
-    <Box flex={1} bg="#000000">
-      {/* Full Screen Background Image / Video Thumbnail */}
-      <Image
-        source={require("@/assets/images/react-logo.png")} // Replace with the glowing heart hands graphic
-        style={{ width: "100%", height: "100%", position: "absolute" }}
-        contentFit="cover"
-      />
-
-      {/* Dark overlay to make text pop */}
-      <Box
-        position="absolute"
-        top={0}
-        bottom={0}
-        left={0}
-        right={0}
-        bg="$black"
-        opacity={0.3}
-      />
-
-      <SafeAreaView style={{ flex: 1, justifyContent: "space-between" }}>
-        {/* Top Header */}
-        <Box
-          px="$6"
-          py="$4"
-          position="relative"
-          justifyContent="center"
-          alignItems="center"
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#000" }}>
+      {/* Header / Back Button */}
+      <Box px="$6" py="$4" flexDirection="row" alignItems="center">
+        <Pressable onPress={() => router.back()} p="$2" ml="-$2">
+          <Ionicons name="chevron-back" size={28} color="#FFFFFF" />
+        </Pressable>
+        <Text
+          color="#FFFFFF"
+          fontWeight="$bold"
+          size="lg"
+          ml="$2"
+          numberOfLines={1}
+          flex={1}
         >
-          <Pressable
-            position="absolute"
-            left={24}
-            onPress={() => router.back()}
-            p="$2"
-            w={36}
-            h={36}
-            borderRadius="$full"
-            borderWidth={1}
-            borderColor="#FFFFFF"
-            justifyContent="center"
-            alignItems="center"
-          >
-            <Text size="sm" color="#FFFFFF" fontWeight="bold">
-              {"<"}
-            </Text>
-          </Pressable>
-          <Text size="xl" fontWeight="$bold" color="#FFFFFF">
-            How to Heal
+          {course?.title || "Course"}
+        </Text>
+      </Box>
+
+      {/* Video Player Area */}
+      <Box flex={1} justifyContent="center" bg="#1A1A1A">
+        {course?.videoUrl ? (
+          <Video
+            ref={videoRef}
+            source={{ uri: course.videoUrl }}
+            style={{ width: "100%", height: 300 }}
+            useNativeControls
+            resizeMode={ResizeMode.CONTAIN}
+            onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
+          />
+        ) : (
+          <Text color="$textLight400" textAlign="center">
+            Video URL not found
           </Text>
-        </Box>
+        )}
+      </Box>
 
-        {/* Bottom Controls Area */}
-        <VStack px="$6" pb="$8" space="lg">
-          {/* Media Buttons */}
-          <HStack
-            justifyContent="center"
-            alignItems="center"
-            space="3xl"
-            mb="$4"
-          >
-            <Pressable>
-              <Text color="#FFFFFF" size="3xl">
-                ⏮
-              </Text>
-            </Pressable>
+      {/* Details & Complete Button */}
+      <VStack
+        bg="#FFFFFF"
+        p="$6"
+        borderTopLeftRadius="$3xl"
+        borderTopRightRadius="$3xl"
+        space="md"
+      >
+        <Text size="xl" fontWeight="$bold" color="$textLight900">
+          {course?.title}
+        </Text>
+        <Text color="$textLight500" size="md">
+          {course?.description}
+        </Text>
 
-            <Pressable
-              w={64}
-              h={64}
-              borderRadius="$full"
-              borderWidth={1}
-              borderColor="#FFFFFF"
-              justifyContent="center"
-              alignItems="center"
+        <Button
+          w="100%"
+          size="xl"
+          bg={hasFinished ? "#E86673" : "#F4F3F2"}
+          borderRadius="$full"
+          mt="$6"
+          disabled={!hasFinished || completeMutation.isPending}
+          onPress={handleComplete}
+        >
+          {completeMutation.isPending ? (
+            <ButtonSpinner color="#FFFFFF" />
+          ) : (
+            <ButtonText
+              fontWeight="$bold"
+              color={hasFinished ? "#FFFFFF" : "$textLight400"}
             >
-              <Text color="#FFFFFF" size="3xl">
-                ▶
-              </Text>
-            </Pressable>
-
-            <Pressable onPress={() => router.replace("/course-completed")}>
-              <Text color="#FFFFFF" size="3xl">
-                ⏭
-              </Text>
-            </Pressable>
-          </HStack>
-
-          {/* Progress Bar */}
-          <VStack space="xs">
-            <Box
-              h={6}
-              bg="rgba(255,255,255,0.3)"
-              borderRadius="$full"
-              w="100%"
-              overflow="hidden"
-            >
-              <Box h="100%" w="15%" bg="#E86673" borderRadius="$full" />
-            </Box>
-            <HStack justifyContent="space-between">
-              <Text color="#FFFFFF" size="xs">
-                00:03
-              </Text>
-              <Text color="#FFFFFF" size="xs">
-                03:23
-              </Text>
-            </HStack>
-          </VStack>
-        </VStack>
-      </SafeAreaView>
-    </Box>
+              {hasFinished ? "Mark as Completed" : "Watch to Complete"}
+            </ButtonText>
+          )}
+        </Button>
+      </VStack>
+    </SafeAreaView>
   );
 }

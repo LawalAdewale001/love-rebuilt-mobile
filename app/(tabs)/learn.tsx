@@ -1,76 +1,56 @@
+import { useMiniCoursesQuery, type CourseCategory } from "@/lib/queries";
 import {
-    Box,
-    Pressable,
-    ScrollView,
-    Text,
-    VStack
+  Box,
+  Pressable,
+  ScrollView,
+  Spinner,
+  Text,
+  VStack,
 } from "@gluestack-ui/themed";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-// Mock Data Structure
-const LEARN_CATEGORIES = [
-  {
-    title: "Faith Love",
-    videos: [
-      {
-        id: 1,
-        title: "How to Heal",
-        duration: "50mins",
-        image: require("@/assets/images/react-logo.png"),
-      },
-      {
-        id: 2,
-        title: "Trust Again",
-        duration: "45mins",
-        image: require("@/assets/images/react-logo.png"),
-      },
-    ],
-  },
-  {
-    title: "Acts of Staying",
-    videos: [
-      {
-        id: 3,
-        title: "How to Heal",
-        duration: "50mins",
-        image: require("@/assets/images/react-logo.png"),
-      },
-      {
-        id: 4,
-        title: "Communication",
-        duration: "30mins",
-        image: require("@/assets/images/react-logo.png"),
-      },
-    ],
-  },
-  {
-    title: "Building Love",
-    videos: [
-      {
-        id: 5,
-        title: "How to Heal",
-        duration: "50mins",
-        image: require("@/assets/images/react-logo.png"),
-      },
-      {
-        id: 6,
-        title: "Growing Together",
-        duration: "60mins",
-        image: require("@/assets/images/react-logo.png"),
-      },
-    ],
-  },
-];
-
 export default function LearnScreen() {
   const router = useRouter();
+
+  // Fetching the categories array
+  const { data: categories, isLoading, error } = useMiniCoursesQuery();
+  console.log(categories, "data for learn");
+
+  if (isLoading) {
+    return (
+      <SafeAreaView
+        style={{
+          flex: 1,
+          backgroundColor: "#FFFFFF",
+          justifyContent: "center",
+        }}
+      >
+        <Spinner size="large" color="#E86673" />
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView
+        style={{
+          flex: 1,
+          backgroundColor: "#FFFFFF",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <Text color="$error500">Failed to load courses. Please try again.</Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
       {/* Header */}
-      <Box px="$6" py="$2" alignItems="center" justifyContent="center">
+      <Box px="$6" py="$4" alignItems="center" justifyContent="center">
         <Text size="xl" fontWeight="$bold" color="$textLight900">
           Learn
         </Text>
@@ -82,16 +62,12 @@ export default function LearnScreen() {
         contentContainerStyle={{ paddingBottom: 40 }}
       >
         <VStack space="2xl" mt="$4">
-          {LEARN_CATEGORIES.map((category, index) => (
-            <VStack key={index} space="md">
-              {/* Category Title */}
-              <Text
-                px="$6"
-                size="md"
-                fontWeight="$medium"
-                color="$textLight500"
-              >
-                {category.title}
+          {/* Map through the Categories array */}
+          {categories?.map((category: CourseCategory) => (
+            <VStack key={category.id} space="md">
+              {/* Category Title -> mapped to category.name */}
+              <Text px="$6" size="md" fontWeight="$bold" color="$textLight900">
+                {category.name}
               </Text>
 
               {/* Horizontal Video Carousel */}
@@ -100,18 +76,24 @@ export default function LearnScreen() {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={{ paddingHorizontal: 24, gap: 16 }}
               >
-                {category.videos.map((video) => (
+                {/* Map through the miniCourses array inside this category */}
+                {category.miniCourses?.map((course) => (
                   <Pressable
-                    key={video.id}
+                    key={course.id}
                     w={160}
                     h={200}
                     borderRadius="$2xl"
                     overflow="hidden"
                     position="relative"
-                    onPress={() => router.push("/video-player")}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/video-player",
+                        params: { id: course.id },
+                      })
+                    }
                   >
                     <Image
-                      source={video.image}
+                      source={{ uri: course.thumbnailUrl }}
                       style={{
                         width: "100%",
                         height: "100%",
@@ -161,14 +143,22 @@ export default function LearnScreen() {
                       position="absolute"
                       bottom={16}
                       left={16}
+                      right={16}
                       zIndex={10}
                     >
-                      <Text color="#FFFFFF" fontWeight="$bold" size="md">
-                        {video.title}
+                      <Text
+                        color="#FFFFFF"
+                        fontWeight="$bold"
+                        size="md"
+                        numberOfLines={2}
+                      >
+                        {course.title}
                       </Text>
-                      <Text color="$textLight300" size="xs">
-                        {video.duration}
-                      </Text>
+                      {course.duration && (
+                        <Text color="$textLight300" size="xs" mt="$1">
+                          {course.duration} mins
+                        </Text>
+                      )}
                     </VStack>
                   </Pressable>
                 ))}

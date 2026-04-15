@@ -7,64 +7,60 @@ export default function CourseCompletedScreen() {
   const router = useRouter();
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#E86673" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
       <VStack
         flex={1}
         px="$6"
         justifyContent="center"
         alignItems="center"
-        space="3xl"
+        space="2xl"
       >
-        {/* Graphic */}
-        <Box w={250} h={180} justifyContent="center" alignItems="center">
-          {/* Export the textured double-heart graphic from Figma and link it here */}
+        {/* Success Graphic */}
+        <Box
+          w={200}
+          h={200}
+          bg="#FFF9FA"
+          borderRadius="$full"
+          justifyContent="center"
+          alignItems="center"
+          mb="$4"
+        >
           <Image
-            source={require("@/assets/images/react-logo.png")}
-            style={{ width: "100%", height: "100%" }}
+            source={require("@/assets/images/candles-graphic.png")} // Fallback to an existing asset, replace with a trophy or checkmark if you have one
+            style={{ width: 120, height: 120 }}
             contentFit="contain"
           />
         </Box>
 
-        {/* Text Content */}
-        <VStack space="sm" alignItems="center" mt="$4">
-          <Text size="xl" fontWeight="$bold" color="#FFFFFF">
-            Course Completed
-          </Text>
+        <VStack space="sm" alignItems="center">
           <Text
-            size="md"
-            color="#FFFFFF"
+            size="3xl"
+            fontWeight="$bold"
+            color="$textLight900"
             textAlign="center"
-            lineHeight="$lg"
-            px="$4"
           >
-            Congrats, Abiodun! You've completed "How to Heal" and have new
-            matches
+            Congratulations!
+          </Text>
+          <Text size="md" color="$textLight600" textAlign="center" px="$4">
+            You've successfully completed this course. Keep up the great work on
+            your journey!
           </Text>
         </VStack>
-      </VStack>
 
-      {/* Bottom Button */}
-      <Box px="$6" pb="$8" pt="$4">
-        <Button
-          w="100%"
-          size="xl"
-          bg="#FFFFFF"
-          borderRadius="$full"
-          // Replace routes back to matches so they can't swipe back to the completion screen
-          onPress={() => router.replace("/(tabs)/matches")}
-          style={{
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.1,
-            shadowRadius: 6,
-            elevation: 3,
-          }}
-        >
-          <ButtonText fontWeight="$bold" color="#1A1A1A">
-            Check Matches
-          </ButtonText>
-        </Button>
-      </Box>
+        <Box w="100%" mt="$8">
+          <Button
+            w="100%"
+            size="xl"
+            bg="#E86673"
+            borderRadius="$full"
+            onPress={() => router.replace("/(tabs)/learn")}
+          >
+            <ButtonText fontWeight="$bold" color="#FFFFFF">
+              Back to Courses
+            </ButtonText>
+          </Button>
+        </Box>
+      </VStack>
     </SafeAreaView>
   );
 }

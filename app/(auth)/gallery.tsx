@@ -1,6 +1,21 @@
 import { OnboardingHeader } from "@/components/ui/onboarding-header";
-import { Box, Button, ButtonText, HStack, Pressable, ScrollView, Text, Textarea, TextareaInput, VStack } from "@gluestack-ui/themed";
+import { showToast } from "@/components/ui/toast";
+import { useS3Upload } from "@/hooks/use-s3-upload";
+import { useUpdateProfileMutation } from "@/lib/queries";
 import { Ionicons } from "@expo/vector-icons";
+import {
+  Box,
+  Button,
+  ButtonSpinner,
+  ButtonText,
+  HStack,
+  Pressable,
+  ScrollView,
+  Text,
+  Textarea,
+  TextareaInput,
+  VStack,
+} from "@gluestack-ui/themed";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
@@ -9,16 +24,19 @@ import { Dimensions, KeyboardAvoidingView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const { width } = Dimensions.get("window");
-// Calculate box size: Screen width - horizontal padding (48) - gaps between boxes (16) divided by 3
 const BOX_SIZE = (width - 48 - 16) / 3;
 
 export default function GalleryScreen() {
   const router = useRouter();
   const [images, setImages] = useState<string[]>([]);
   const [bio, setBio] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const { upload } = useS3Upload();
+  const updateMutation = useUpdateProfileMutation();
 
   const pickImage = async () => {
-    if (images.length >= 6) return; // Max 6 images
+    if (images.length >= 6) return;
 
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
@@ -29,7 +47,7 @@ export default function GalleryScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      aspect: [1, 1], // Keep images square
+      aspect: [1, 1],
       quality: 0.8,
     });
 
@@ -44,13 +62,40 @@ export default function GalleryScreen() {
 
   const isComplete = images.length > 0 && bio.trim().length > 0;
 
-  const handleSubmit = () => {
-    // End of Auth Flow! Route the user to the main app dashboard.
-    // Replace removes the auth stack from history so they can't swipe back to it.
-    router.replace("/(tabs)");
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+
+    try {
+      const uploadedUrls: string[] = [];
+
+      for (const uri of images) {
+        const filename = uri.split("/").pop() || `photo-${Date.now()}.jpg`;
+        const result = await upload(uri, filename, "image/jpeg");
+
+        if (result?.fileUrl) {
+          uploadedUrls.push(result.fileUrl);
+        } else {
+          throw new Error("One or more images failed to upload");
+        }
+      }
+
+      // Payload directly maps to your schema: { bio: "string", pictures: ["string"] }
+      updateMutation.mutate({ pictures: uploadedUrls, bio } as any, {
+        onSuccess: () => {
+          showToast("success", "Profile Complete", "Welcome aboard!");
+          router.replace("/(tabs)");
+        },
+        onError: (err: any) => {
+          showToast("error", "Error", err?.message || "Failed to save profile");
+          setIsSubmitting(false);
+        },
+      });
+    } catch (error: any) {
+      showToast("error", "Upload Error", error.message);
+      setIsSubmitting(false);
+    }
   };
 
-  // Create an array of 6 slots (filled or empty)
   const slots = Array.from({ length: 6 }).map((_, i) => images[i] || null);
 
   return (
@@ -75,7 +120,6 @@ export default function GalleryScreen() {
             mt="$6"
             contentContainerStyle={{ paddingBottom: 40 }}
           >
-            {/* Photo Grid */}
             <HStack flexWrap="wrap" gap={8} mb="$8">
               {slots.map((imageUri, index) => (
                 <Box key={index} width={BOX_SIZE} height={BOX_SIZE}>
@@ -103,7 +147,6 @@ export default function GalleryScreen() {
                         alignItems="center"
                         onPress={() => removeImage(index)}
                       >
-                        {/* Optional: Add a trash icon here. Using simple text for placeholder */}
                         <Ionicons name="close" size={16} color="white" />
                       </Pressable>
                     </Box>
@@ -119,15 +162,17 @@ export default function GalleryScreen() {
                       alignItems="center"
                       onPress={pickImage}
                     >
-                      {/* You can map a camera icon here. Using text as placeholder */}
-                        <Ionicons name="camera-outline" size={32} color="#E86673" />
+                      <Ionicons
+                        name="camera-outline"
+                        size={32}
+                        color="#E86673"
+                      />
                     </Pressable>
                   )}
                 </Box>
               ))}
             </HStack>
 
-            {/* Bio Input */}
             <Box
               borderWidth={1}
               borderColor="#E0E0E0"
@@ -165,22 +210,25 @@ export default function GalleryScreen() {
             </Box>
           </ScrollView>
 
-          {/* Fixed Submit Button */}
           <Box pb="$8" pt="$4" bg="$white">
             <Button
               w="100%"
               size="xl"
               bg={isComplete ? "#E86673" : "#F4F3F2"}
               borderRadius="$full"
-              disabled={!isComplete}
+              disabled={!isComplete || isSubmitting}
               onPress={handleSubmit}
             >
-              <ButtonText
-                fontWeight="$bold"
-                color={isComplete ? "#FFFFFF" : "$textLight400"}
-              >
-                Submit
-              </ButtonText>
+              {isSubmitting ? (
+                <ButtonSpinner color="#FFFFFF" />
+              ) : (
+                <ButtonText
+                  fontWeight="$bold"
+                  color={isComplete ? "#FFFFFF" : "$textLight400"}
+                >
+                  Submit
+                </ButtonText>
+              )}
             </Button>
           </Box>
         </VStack>

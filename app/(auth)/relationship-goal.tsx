@@ -1,5 +1,7 @@
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { OnboardingHeader } from "@/components/ui/onboarding-header";
+import { showToast } from "@/components/ui/toast";
+import { useUpdateProfileMutation } from "@/lib/queries";
 import {
   Actionsheet,
   ActionsheetBackdrop,
@@ -10,6 +12,7 @@ import {
   ActionsheetItemText,
   Box,
   Button,
+  ButtonSpinner,
   ButtonText,
   Divider,
   Input,
@@ -37,12 +40,26 @@ const GOAL_OPTIONS = [
 
 export default function RelationshipGoalScreen() {
   const router = useRouter();
+  const updateMutation = useUpdateProfileMutation();
+
   const [isOpen, setIsOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
 
   const handleSelect = (option: string) => {
     setSelected(option);
     setIsOpen(false);
+  };
+
+  const handleContinue = () => {
+    if (!selected) return;
+    updateMutation.mutate(
+      { relationshipGoal: selected },
+      {
+        onSuccess: () => router.push("/children-status"),
+        onError: (err: any) =>
+          showToast("error", "Error", err?.message || "Failed to save goal"),
+      },
+    );
   };
 
   return (
@@ -75,12 +92,14 @@ export default function RelationshipGoalScreen() {
               pointerEvents="none"
             />
             <InputSlot pr="$4">
-              <IconSymbol
-                name="chevron.right"
-                size={20}
-                color="#1A1A1A"
-                style={{ transform: [{ rotate: "90deg" }] }}
-              />
+              <Box>
+                <IconSymbol
+                  name="chevron.right"
+                  size={20}
+                  color="#1A1A1A"
+                  style={{ transform: [{ rotate: "90deg" }] }}
+                />
+              </Box>
             </InputSlot>
           </Input>
         </Pressable>
@@ -98,22 +117,25 @@ export default function RelationshipGoalScreen() {
             contentFit="contain"
           />
 
-          {/* Per your design, the active button here is Pink */}
           <Button
             w="100%"
             size="xl"
             bg={selected ? "#E86673" : "#F4F3F2"}
             borderRadius="$full"
             mt="auto"
-            disabled={!selected}
-            onPress={() => router.push("/children-status")}
+            disabled={!selected || updateMutation.isPending}
+            onPress={handleContinue}
           >
-            <ButtonText
-              fontWeight="$bold"
-              color={selected ? "#FFFFFF" : "$textLight400"}
-            >
-              Continue
-            </ButtonText>
+            {updateMutation.isPending ? (
+              <ButtonSpinner color="#FFFFFF" />
+            ) : (
+              <ButtonText
+                fontWeight="$bold"
+                color={selected ? "#FFFFFF" : "$textLight400"}
+              >
+                Continue
+              </ButtonText>
+            )}
           </Button>
         </Box>
       </VStack>

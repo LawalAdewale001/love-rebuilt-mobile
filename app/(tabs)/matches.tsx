@@ -72,12 +72,12 @@ export default function MatchesScreen() {
               paddingHorizontal: 24,
               paddingBottom: 24,
               paddingTop: 16,
-              gap: 16,
             }}
             snapToInterval={width * 0.85 + 16}
             decelerationRate="fast"
           >
-            {matches.map((match) => {
+            {matches.map((match, index) => {
+              // Added index here
               const age = match.dob
                 ? new Date().getFullYear() - new Date(match.dob).getFullYear()
                 : "";
@@ -87,6 +87,7 @@ export default function MatchesScreen() {
                   key={match.id}
                   w={width * 0.85}
                   h="100%"
+                  mr={index === matches.length - 1 ? 0 : 16} // Replaced Gap with margin-right
                   borderRadius={30}
                   overflow="hidden"
                   position="relative"

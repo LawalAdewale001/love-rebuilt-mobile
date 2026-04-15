@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { Audio } from 'expo-av';
 import createAgoraRtcEngine, {
   ChannelProfileType,
   ClientRoleType,
@@ -96,11 +97,13 @@ export function useAgoraRTC({ channelName, token, uid, isVideo, onTokenError }: 
         },
       });
 
+      // Audio must be enabled for all call types (including video)
+      engine.current.enableAudio();
+
       if (isVideo) {
         engine.current.enableVideo();
+        engine.current.enableLocalVideo(true);
         engine.current.startPreview();
-      } else {
-        engine.current.enableAudio();
       }
 
       engine.current.setEnableSpeakerphone(isSpeakerOn);
@@ -133,19 +136,37 @@ export function useAgoraRTC({ channelName, token, uid, isVideo, onTokenError }: 
   }, [channelName, isVideo, token, uid, isSpeakerOn, joined, onTokenError]);
 
   const leave = useCallback(() => {
-    try {
-      if (engine.current) {
-        engine.current.leaveChannel();
-        engine.current.release();
-        engine.current = null;
-      }
-      setJoined(false);
-      setRemoteUsers([]);
-      setLocalUid(0);
-    } catch (e) {
-      console.error('[Agora] Leave failed:', e);
+    const eng = engine.current;
+    engine.current = null; // Clear ref first so no further calls land on it
+    setJoined(false);
+    setRemoteUsers([]);
+    setLocalUid(0);
+
+    if (eng) {
+      try { eng.muteLocalAudioStream(true); } catch { }
+      if (isVideo) { try { eng.muteLocalVideoStream(true); } catch { } }
+      try { eng.leaveChannel(); } catch { }
+      // Brief delay so leaveChannel can complete before release + audio reset
+      setTimeout(() => {
+        try { eng.release(); } catch { }
+        Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: false,
+          shouldDuckAndroid: false,
+          staysActiveInBackground: false,
+          playThroughEarpieceAndroid: false,
+        }).catch(() => {});
+      }, 300);
+    } else {
+      Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: false,
+        shouldDuckAndroid: false,
+        staysActiveInBackground: false,
+        playThroughEarpieceAndroid: false,
+      }).catch(() => {});
     }
-  }, []);
+  }, [isVideo]);
 
   const toggleMute = useCallback(() => {
     if (engine.current) {

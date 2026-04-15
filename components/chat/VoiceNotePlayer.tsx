@@ -1,7 +1,7 @@
 import { Audio, AVPlaybackStatus } from "expo-av";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { Box, HStack, Pressable, Text, Center, VStack } from "@gluestack-ui/themed";
-import { useEffect, useState, useRef } from "react";
+import { Box, HStack, Pressable, Text, VStack } from "@gluestack-ui/themed";
+import { memo, useEffect, useRef, useState } from "react";
 import { PRIMARY_COLOR } from "@/constants/theme";
 
 interface VoiceNotePlayerProps {
@@ -9,16 +9,21 @@ interface VoiceNotePlayerProps {
   sent: boolean;
 }
 
-export function VoiceNotePlayer({ uri, sent }: VoiceNotePlayerProps) {
+function VoiceNotePlayerComponent({ uri, sent }: VoiceNotePlayerProps) {
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const soundRef = useRef<Audio.Sound | null>(null);
 
   useEffect(() => {
+    soundRef.current = sound;
     return () => {
-      if (sound) sound.unloadAsync();
+      // Unload on a microtask to avoid calling ExoPlayer.release() from
+      // its own status-callback thread (pool-N), which crashes on Android.
+      const toUnload = soundRef.current;
+      if (toUnload) Promise.resolve().then(() => toUnload.unloadAsync().catch(() => {}));
     };
   }, [sound]);
 
@@ -26,11 +31,14 @@ export function VoiceNotePlayer({ uri, sent }: VoiceNotePlayerProps) {
     if (status.isLoaded) {
       setPosition(status.positionMillis);
       setDuration(status.durationMillis || 0);
-      setIsPlaying(status.isPlaying);
       if (status.didJustFinish) {
+        // Reset UI — do NOT call stopAsync/unloadAsync here; this callback
+        // runs on ExoPlayer's internal thread and calling ExoPlayer methods
+        // from it throws IllegalStateException on Android.
         setIsPlaying(false);
         setPosition(0);
-        sound?.stopAsync();
+      } else {
+        setIsPlaying(status.isPlaying);
       }
     }
   };
@@ -45,7 +53,7 @@ export function VoiceNotePlayer({ uri, sent }: VoiceNotePlayerProps) {
     } else {
       setIsLoading(true);
       try {
-         const { sound: newSound } = await Audio.Sound.createAsync(
+        const { sound: newSound } = await Audio.Sound.createAsync(
           { uri },
           { shouldPlay: true },
           onPlaybackStatusUpdate
@@ -69,21 +77,21 @@ export function VoiceNotePlayer({ uri, sent }: VoiceNotePlayerProps) {
   const progress = duration > 0 ? position / duration : 0;
 
   return (
-    <Box 
-      bg={sent ? "rgba(255,255,255,0.1)" : "#F2F2F2"} 
-      borderRadius={12} 
-      p="$2" 
+    <Box
+      bg={sent ? "rgba(255,255,255,0.1)" : "#F2F2F2"}
+      borderRadius={12}
+      p="$2"
       minWidth={180}
     >
       <HStack alignItems="center" space="xs">
-        <Pressable 
+        <Pressable
           onPress={playPause}
           w={32} h={32} borderRadius={16}
           bg={sent ? "#FFFFFF" : PRIMARY_COLOR}
           justifyContent="center" alignItems="center"
         >
           {isLoading ? (
-             <MaterialIcons name="hourglass-empty" size={18} color={sent ? PRIMARY_COLOR : "#FFFFFF"} />
+            <MaterialIcons name="hourglass-empty" size={18} color={sent ? PRIMARY_COLOR : "#FFFFFF"} />
           ) : (
             <MaterialIcons
               name={isPlaying ? "pause" : "play-arrow"}
@@ -112,4 +120,4 @@ export function VoiceNotePlayer({ uri, sent }: VoiceNotePlayerProps) {
   );
 }
 
-
+export const VoiceNotePlayer = memo(VoiceNotePlayerComponent);

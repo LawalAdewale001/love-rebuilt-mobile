@@ -16,7 +16,7 @@ import {
   Pressable,
   ScrollView,
   Text,
-  VStack
+  VStack,
 } from "@gluestack-ui/themed";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
@@ -60,6 +60,19 @@ export default function SettingsLocationScreen() {
           showToast("error", "Error", "Failed to update location."),
       },
     );
+  };
+
+  // Helper to format the display name if the backend returns an object
+  const formatLocationDisplay = (loc: any) => {
+    if (typeof loc === "string") return loc;
+
+    // If backend returns distinct fields:
+    if (loc.city && loc.state && loc.country) {
+      return `${loc.city}, ${loc.state}, ${loc.country}`;
+    }
+
+    // Fallback to name or formatted address
+    return loc.formattedAddress || loc.name || "Unknown Location";
   };
 
   return (
@@ -111,7 +124,7 @@ export default function SettingsLocationScreen() {
             />
           </InputSlot>
           <InputField
-            placeholder="Enter a new location"
+            placeholder="Enter a new location (NG or UK)"
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
@@ -150,8 +163,23 @@ export default function SettingsLocationScreen() {
             )}
 
             {!isLoading &&
+              searchResults &&
+              searchResults.length === 0 &&
+              debouncedQuery.length > 2 && (
+                <Text color="$textLight500" textAlign="center">
+                  No locations found in Nigeria or the UK.
+                </Text>
+              )}
+
+            {!isLoading &&
               searchResults?.map((loc: any, i: number) => {
-                const locName = loc.name || loc.formattedAddress || loc;
+                const locName = formatLocationDisplay(loc);
+
+                // Split for UI display: "City" on top, "State, Country" below
+                const parts = locName.split(",");
+                const mainTitle = parts[0];
+                const subtitle = parts.slice(1).join(",").trim();
+
                 return (
                   <Pressable key={i} onPress={() => handleSave(locName)}>
                     <HStack space="md" alignItems="center">
@@ -162,11 +190,13 @@ export default function SettingsLocationScreen() {
                       />
                       <VStack>
                         <Text fontWeight="$medium" color="$textLight900">
-                          {locName.split(",")[0]}
+                          {mainTitle}
                         </Text>
-                        <Text color="$textLight500" size="sm">
-                          {locName}
-                        </Text>
+                        {subtitle ? (
+                          <Text color="$textLight500" size="sm">
+                            {subtitle}
+                          </Text>
+                        ) : null}
                       </VStack>
                     </HStack>
                   </Pressable>

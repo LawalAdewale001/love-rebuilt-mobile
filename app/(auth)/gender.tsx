@@ -1,5 +1,7 @@
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { OnboardingHeader } from "@/components/ui/onboarding-header";
+import { showToast } from "@/components/ui/toast";
+import { useUpdateProfileMutation } from "@/lib/queries";
 import {
   Actionsheet,
   ActionsheetBackdrop,
@@ -10,6 +12,7 @@ import {
   ActionsheetItemText,
   Box,
   Button,
+  ButtonSpinner,
   ButtonText,
   Divider,
   Input,
@@ -24,16 +27,37 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const GENDER_OPTIONS = ["Man", "Female"];
+const GENDER_OPTIONS = [
+  { label: "Man", value: "Male" },
+  { label: "Woman", value: "Female" },
+];
 
 export default function GenderScreen() {
   const router = useRouter();
-  const [isOpen, setIsOpen] = useState(false);
-  const [selected, setSelected] = useState<string | null>(null);
+  const updateMutation = useUpdateProfileMutation();
 
-  const handleSelect = (option: string) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [selected, setSelected] = useState<{
+    label: string;
+    value: string;
+  } | null>(null);
+
+  const handleSelect = (option: { label: string; value: string }) => {
     setSelected(option);
     setIsOpen(false);
+  };
+
+  const handleContinue = () => {
+    if (!selected) return;
+
+    updateMutation.mutate(
+      { gender: selected.value },
+      {
+        onSuccess: () => router.push("/identity"),
+        onError: (err: any) =>
+          showToast("error", "Error", err?.message || "Failed to save gender"),
+      },
+    );
   };
 
   return (
@@ -60,13 +84,12 @@ export default function GenderScreen() {
             isReadOnly
           >
             <InputField
-              value={selected || ""}
-              placeholder="Select your Identity (e.g man)"
+              value={selected?.label || ""}
+              placeholder="Select your Identity (e.g Man)"
               placeholderTextColor="$textLight400"
               color="$textLight900"
               pointerEvents="none"
             />
-            {/* Wrapped the icon in a standard Box to help TS type inference */}
             <InputSlot pr="$4">
               <Box>
                 <IconSymbol
@@ -82,10 +105,9 @@ export default function GenderScreen() {
 
         {/* Graphic & Button Area */}
         <Box flex={1} justifyContent="flex-end" alignItems="center" pb="$8">
-          {/* Background Graphic positioned absolutely behind the button */}
           <Box
             position="absolute"
-            bottom={-40} // Pushes it down to bleed off the screen
+            bottom={-40}
             left={0}
             right={0}
             alignItems="center"
@@ -108,9 +130,8 @@ export default function GenderScreen() {
             bg={selected ? "#E86673" : "#F4F3F2"}
             borderRadius="$full"
             mt="$6"
-            disabled={!selected}
-            onPress={() => router.push("/identity")}
-            // Added shadow so the button stands out clearly over the graphic
+            disabled={!selected || updateMutation.isPending}
+            onPress={handleContinue}
             style={
               selected
                 ? {
@@ -123,12 +144,16 @@ export default function GenderScreen() {
                 : {}
             }
           >
-            <ButtonText
-              fontWeight="$bold"
-              color={selected ? "#FFFFFF" : "$textLight400"}
-            >
-              Continue
-            </ButtonText>
+            {updateMutation.isPending ? (
+              <ButtonSpinner color="#FFFFFF" />
+            ) : (
+              <ButtonText
+                fontWeight="$bold"
+                color={selected ? "#FFFFFF" : "$textLight400"}
+              >
+                Continue
+              </ButtonText>
+            )}
           </Button>
         </Box>
       </VStack>
@@ -158,8 +183,8 @@ export default function GenderScreen() {
             >
               I'm a
             </Text>
-            {GENDER_OPTIONS.map((opt, index) => (
-              <Box key={opt}>
+            {GENDER_OPTIONS.map((opt) => (
+              <Box key={opt.value}>
                 <Divider bg="$borderLight200" />
                 <ActionsheetItem
                   onPress={() => handleSelect(opt)}
@@ -170,7 +195,7 @@ export default function GenderScreen() {
                     color="$textLight900"
                     fontWeight="$medium"
                   >
-                    {opt}
+                    {opt.label}
                   </ActionsheetItemText>
                 </ActionsheetItem>
               </Box>

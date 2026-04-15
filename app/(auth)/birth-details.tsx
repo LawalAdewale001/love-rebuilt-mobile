@@ -1,7 +1,10 @@
 import { OnboardingHeader } from "@/components/ui/onboarding-header";
+import { showToast } from "@/components/ui/toast";
+import { useUpdateProfileMutation } from "@/lib/queries";
 import {
   Box,
   Button,
+  ButtonSpinner,
   ButtonText,
   HStack,
   Input,
@@ -11,10 +14,46 @@ import {
 } from "@gluestack-ui/themed";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
+import { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function BirthDetailsScreen() {
   const router = useRouter();
+  const updateMutation = useUpdateProfileMutation();
+
+  const [day, setDay] = useState("");
+  const [month, setMonth] = useState("");
+  const [year, setYear] = useState("");
+
+  const isComplete = day.length > 0 && month.length > 0 && year.length === 4;
+
+  const handleContinue = () => {
+    if (!isComplete) return;
+
+    try {
+      const dobDate = new Date(
+        parseInt(year),
+        parseInt(month) - 1,
+        parseInt(day),
+      );
+      const dobString = dobDate.toISOString();
+
+      updateMutation.mutate(
+        { dob: dobString },
+        {
+          onSuccess: () => router.push("/gender"),
+          onError: (err: any) =>
+            showToast(
+              "error",
+              "Error",
+              err?.message || "Failed to save date of birth",
+            ),
+        },
+      );
+    } catch (error) {
+      showToast("error", "Invalid Date", "Please enter a valid date of birth.");
+    }
+  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
@@ -29,6 +68,7 @@ export default function BirthDetailsScreen() {
         </Text>
 
         <HStack space="md" mt="$8" justifyContent="space-between">
+          {/* DAY INPUT */}
           <Box flex={1}>
             <Input
               size="xl"
@@ -37,21 +77,29 @@ export default function BirthDetailsScreen() {
               bg="#F7F5F4"
               borderWidth={1}
               borderColor="$borderLight900"
+              h={65} // <-- Explicitly making the input box taller
             >
-              <VStack pl="$4" py="$2" justifyContent="center">
-                <Text size="xs" color="$textLight500">
+              <VStack pl="$4" flex={1} justifyContent="center" pb="$1">
+                <Text size="xs" color="$textLight500" mt="$1">
                   Day
                 </Text>
                 <InputField
                   p={0}
-                  h={24}
-                  value="07"
+                  flex={1} // <-- Letting the input naturally fill the remaining space
+                  value={day}
+                  onChangeText={setDay}
+                  keyboardType="numeric"
+                  maxLength={2}
                   fontWeight="$bold"
-                  size="lg"
+                  size="md"
+                  placeholder="DD"
+                  color="$textLight900"
                 />
               </VStack>
             </Input>
           </Box>
+
+          {/* MONTH INPUT */}
           <Box flex={1}>
             <Input
               size="xl"
@@ -60,21 +108,29 @@ export default function BirthDetailsScreen() {
               bg="#F7F5F4"
               borderWidth={1}
               borderColor="$borderLight900"
+              h={65}
             >
-              <VStack pl="$4" py="$2" justifyContent="center">
-                <Text size="xs" color="$textLight500">
+              <VStack pl="$4" flex={1} justifyContent="center" pb="$1">
+                <Text size="xs" color="$textLight500" mt="$1">
                   Month
                 </Text>
                 <InputField
                   p={0}
-                  h={24}
-                  value="05"
+                  flex={1}
+                  value={month}
+                  onChangeText={setMonth}
+                  keyboardType="numeric"
+                  maxLength={2}
                   fontWeight="$bold"
-                  size="lg"
+                  size="md"
+                  placeholder="MM"
+                  color="$textLight900"
                 />
               </VStack>
             </Input>
           </Box>
+
+          {/* YEAR INPUT */}
           <Box flex={1.2}>
             <Input
               size="xl"
@@ -83,49 +139,48 @@ export default function BirthDetailsScreen() {
               bg="#F7F5F4"
               borderWidth={1}
               borderColor="$borderLight900"
+              h={65}
             >
-              <VStack pl="$4" py="$2" justifyContent="center">
-                <Text size="xs" color="$textLight500">
+              <VStack pl="$4" flex={1} justifyContent="center" pb="$1">
+                <Text size="xs" color="$textLight500" mt="$1">
                   Year
                 </Text>
                 <InputField
                   p={0}
-                  h={24}
-                  value="1907"
+                  flex={1}
+                  value={year}
+                  onChangeText={setYear}
+                  keyboardType="numeric"
+                  maxLength={4}
                   fontWeight="$bold"
-                  size="lg"
+                  size="md"
+                  placeholder="YYYY"
+                  color="$textLight900"
                 />
               </VStack>
             </Input>
           </Box>
         </HStack>
 
-        <Box
-          flex={1}
-          justifyContent="flex-end"
-          alignItems="center"
-          pb="$8"
-          // Removed flexDirection="row" from here so the button spans full width properly
-        >
-          {/* Candles Container - Placed absolutely behind the button */}
+        <Box flex={1} justifyContent="flex-end" alignItems="center" pb="$8">
           <HStack
             position="absolute"
-            bottom={-80} // Adjusted from -50 to bring them up further on the screen
-            left={-10} // Slight negative margin ensures they fill the edges nicely
+            bottom={-80}
+            left={-10}
             right={-10}
-            justifyContent="space-between" // Spaces the two images evenly
+            justifyContent="space-between"
             alignItems="flex-end"
-            zIndex={-1} // Crucial: Keeps images behind the button
-            pointerEvents="none" // Ensures images don't accidentally block button taps
+            zIndex={-1}
+            pointerEvents="none"
           >
             <Image
               source={require("@/assets/images/candles-graphic1.png")}
-              style={{ width: 186.3, height: 513.86 }} // Exact Figma specs
+              style={{ width: 186.3, height: 513.86 }}
               contentFit="contain"
             />
             <Image
               source={require("@/assets/images/candles-graphic.png")}
-              style={{ width: 186.3, height: 513.86 }} // Exact Figma specs
+              style={{ width: 186.3, height: 513.86 }}
               contentFit="contain"
             />
           </HStack>
@@ -136,8 +191,8 @@ export default function BirthDetailsScreen() {
             bg="#FFFFFF"
             borderRadius="$full"
             mt="auto"
-            onPress={() => router.push("/gender")}
-            // Added a subtle shadow so the white button pops clearly over the busy candle graphics
+            disabled={!isComplete || updateMutation.isPending}
+            onPress={handleContinue}
             style={{
               shadowColor: "#000",
               shadowOffset: { width: 0, height: 2 },
@@ -148,9 +203,13 @@ export default function BirthDetailsScreen() {
               bottom: "5%",
             }}
           >
-            <ButtonText fontWeight="$bold" color="#1A1A1A">
-              Continue
-            </ButtonText>
+            {updateMutation.isPending ? (
+              <ButtonSpinner color="#1A1A1A" />
+            ) : (
+              <ButtonText fontWeight="$bold" color="#1A1A1A">
+                Continue
+              </ButtonText>
+            )}
           </Button>
         </Box>
       </VStack>

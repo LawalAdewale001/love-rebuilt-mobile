@@ -1,3 +1,4 @@
+import React, { useEffect, useState } from "react";
 import {
   CallOptionIcon,
   VideoCallOptionIcon,
@@ -11,24 +12,32 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Box, HStack, Pressable, Text, VStack } from "@gluestack-ui/themed";
 import { Image } from "expo-image";
 import { useRef } from "react";
-import { ActivityIndicator, Animated } from "react-native";
+import { ActivityIndicator, Animated, Easing } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useInteractionMutation } from "@/lib/queries";
 import { PRIMARY_COLOR } from "@/constants/theme";
 import type { SheetType } from "@/types/chat.types";
 
-const PRIVATE_OPTIONS_MENU = [
-  { label: "Call", appendName: true, icon: <CallOptionIcon size={24} />, sheet: null as SheetType, callType: "voice" as string | null },
-  { label: "Video Call", appendName: true, icon: <VideoCallOptionIcon size={24} />, sheet: null as SheetType, callType: "video" as string | null },
-  { label: "Plan a meetup", appendName: false, icon: <PlanMeetupOptionIcon size={24} />, sheet: "planMeetup" as SheetType, callType: null as string | null },
-  { label: "Block", appendName: false, icon: <BlockOptionIcon size={24} />, sheet: "block" as SheetType, callType: null as string | null },
-  { label: "Report", appendName: false, icon: <ReportOptionIcon size={24} />, sheet: "report" as SheetType, callType: null as string | null },
+type OptionItem = {
+  label: string;
+  appendName: boolean;
+  Icon: React.ComponentType<{ size: number }>;
+  sheet: SheetType;
+  callType: string | null;
+};
+
+const PRIVATE_OPTIONS_MENU: OptionItem[] = [
+  { label: "Call", appendName: true, Icon: CallOptionIcon, sheet: null, callType: "voice" },
+  { label: "Video Call", appendName: true, Icon: VideoCallOptionIcon, sheet: null, callType: "video" },
+  { label: "Plan a meetup", appendName: false, Icon: PlanMeetupOptionIcon, sheet: "planMeetup", callType: null },
+  { label: "Block", appendName: false, Icon: BlockOptionIcon, sheet: "block", callType: null },
+  { label: "Report", appendName: false, Icon: ReportOptionIcon, sheet: "report", callType: null },
 ];
 
-const GROUP_OPTIONS_MENU = [
-  { label: "Leave Group", appendName: false, icon: <LeaveGroupOptionIcon size={24} />, sheet: "leave" as SheetType, callType: null as string | null },
-  { label: "Report Group", appendName: false, icon: <ReportOptionIcon size={24} />, sheet: "report" as SheetType, callType: null as string | null },
+const GROUP_OPTIONS_MENU: OptionItem[] = [
+  { label: "Leave Group", appendName: false, Icon: LeaveGroupOptionIcon, sheet: "leave", callType: null },
+  { label: "Report Group", appendName: false, Icon: ReportOptionIcon, sheet: "report", callType: null },
 ];
 
 interface ChatHeaderProps {
@@ -73,6 +82,33 @@ export function ChatHeader({
   const router = useRouter();
   const likeScale = useRef(new Animated.Value(1)).current;
   const interactionMutation = useInteractionMutation();
+
+  // ── Menu animation ──────────────────────────────────────────────────────────
+  const menuAnim = useRef(new Animated.Value(0)).current;
+  const [menuMounted, setMenuMounted] = useState(false);
+
+  useEffect(() => {
+    if (showOptions) {
+      setMenuMounted(true);
+      menuAnim.setValue(0);
+      Animated.spring(menuAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        overshootClamping: false,
+        restDisplacementThreshold: 0.01,
+        restSpeedThreshold: 0.01,
+        tension: 280,
+        friction: 22,
+      }).start();
+    } else {
+      Animated.timing(menuAnim, {
+        toValue: 0,
+        duration: 120,
+        easing: Easing.in(Easing.ease),
+        useNativeDriver: true,
+      }).start(() => setMenuMounted(false));
+    }
+  }, [showOptions]);
 
   const formatLastSeen = (dateStr?: string) => {
     if (!dateStr) return "Offline";
@@ -175,85 +211,115 @@ export function ChatHeader({
               <Text color="#FFFFFF" fontSize={14} fontWeight="$bold">Join</Text>
             </Pressable>
           ) : (
-            <Pressable 
-              onPress={() => setShowOptions(!showOptions)} 
+            <Pressable
+              onPress={() => setShowOptions(!showOptions)}
               disabled={isUploading || isUnblocking}
               bg="transparent"
-              p="$2"
-              borderRadius="$full"
-              hitSlop={15}
+              w={44}
+              h={44}
+              borderRadius={22}
+              justifyContent="center"
+              alignItems="center"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <MaterialIcons 
-                name="more-vert" 
-                size={26} 
-                color={(isUploading || isUnblocking) ? "#BDBDBD" : "#1A1A1A"} 
+              <MaterialIcons
+                name="more-vert"
+                size={26}
+                color={(isUploading || isUnblocking) ? "#BDBDBD" : "#1A1A1A"}
               />
             </Pressable>
           )}
         </HStack>
       </HStack>
 
-      {/* Options Dropdown */}
-      {showOptions && (
+      {/* Options Dropdown — backdrop lives in the parent screen at screen level */}
+      {menuMounted && (
+        <Animated.View
+          style={{
+            position: "absolute",
+            top: 70,
+            right: 16,
+            zIndex: 100,
+            opacity: menuAnim,
+            transform: [
+              {
+                scale: menuAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.82, 1],
+                }),
+              },
+              {
+                translateY: menuAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [-6, 0],
+                }),
+              },
+            ],
+          }}
+        >
         <Box
-          position="absolute"
-          top={70}
-          right={16}
           bg="#FFFFFF"
           borderRadius={12}
-          py="$2"
-          px="$1"
-          zIndex={100}
+          py="$1"
           shadowColor="#000000"
-          shadowOffset={{ width: 0, height: 2 }}
-          shadowOpacity={0.15}
-          shadowRadius={8}
-          elevation={5}
-          minWidth={200}
+          shadowOffset={{ width: 0, height: 4 }}
+          shadowOpacity={0.14}
+          shadowRadius={14}
+          elevation={10}
+          minWidth={220}
         >
-          {(isGroup ? GROUP_OPTIONS_MENU : PRIVATE_OPTIONS_MENU).map((option) => (
-            <Pressable
-              key={option.label}
-              onPress={() => {
-                setShowOptions(false);
-                if (option.callType) {
-                  router.push({ pathname: "/call-screen", params: { name, type: option.callType, chatId, avatar } });
-                } else if (option.label === "Block" || option.label === "Unblock") {
-                  if (isBlocked) {
-                    onUnblock();
-                  } else {
-                    openSheet("block");
-                  }
-                } else if (option.sheet) {
-                  openSheet(option.sheet);
-                }
-              }}
-              px="$4"
-              py="$3"
-            >
-              <HStack alignItems="center" space="md" opacity={(isUploading || isUnblocking) ? 0.6 : 1}>
-                {option.label === "Block" && isBlocked && isUnblocking ? (
-                  <ActivityIndicator size="small" color={PRIMARY_COLOR} />
-                ) : (
-                  option.icon
-                )}
-                <Text fontSize={14} color="#1A1A1A" numberOfLines={1} ellipsizeMode="tail" flex={1}>
-                  {option.label === "Block" ? (isBlocked ? (isUnblocking ? "Unblocking..." : "Unblock") : "Block") : option.label}
-                  {option.appendName ? ` ${name}` : ""}
-                </Text>
-              </HStack>
-            </Pressable>
-          ))}
+          {(isGroup ? GROUP_OPTIONS_MENU : PRIVATE_OPTIONS_MENU).map((option, index) => {
+            const isLast = index === (isGroup ? GROUP_OPTIONS_MENU : PRIVATE_OPTIONS_MENU).length - 1;
+            const label =
+              option.label === "Block"
+                ? isBlocked ? (isUnblocking ? "Unblocking..." : "Unblock") : "Block"
+                : option.label;
+            return (
+              <Pressable
+                key={option.label}
+                onPress={() => {
+                  setShowOptions(false);
+                  // Small delay so the dropdown closes cleanly before navigating/opening sheet
+                  setTimeout(() => {
+                    if (option.callType) {
+                      router.push({
+                        pathname: "/call-screen",
+                        params: {
+                          name,
+                          type: option.callType,
+                          chatId,
+                          avatar,
+                          mode: "outgoing",
+                          recipientId: recipientIdParam,
+                        },
+                      });
+                    } else if (option.label === "Block" || option.label === "Unblock") {
+                      isBlocked ? onUnblock() : openSheet("block");
+                    } else if (option.sheet) {
+                      openSheet(option.sheet);
+                    }
+                  }, 80);
+                }}
+                px="$5"
+                py="$3.5"
+                borderBottomWidth={isLast ? 0 : 1}
+                borderBottomColor="#F5F5F5"
+              >
+                <HStack alignItems="center" space="md" opacity={(isUploading || isUnblocking) ? 0.5 : 1}>
+                  {option.label === "Block" && isBlocked && isUnblocking ? (
+                    <ActivityIndicator size="small" color={PRIMARY_COLOR} />
+                  ) : (
+                    <option.Icon size={22} />
+                  )}
+                  <Text fontSize={15} color="#1A1A1A" fontWeight="$medium">
+                    {label}{option.appendName ? ` ${name}` : ""}
+                  </Text>
+                </HStack>
+              </Pressable>
+            );
+          })}
         </Box>
-      )}
-
-      {showOptions && (
-        <Pressable
-          position="absolute"
-          top={0} left={0} right={0} bottom={0}
-          zIndex={99}
-          onPress={() => setShowOptions(false)}
-        />
+        </Animated.View>
       )}
     </>
   );

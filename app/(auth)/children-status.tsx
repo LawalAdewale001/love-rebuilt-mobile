@@ -1,24 +1,27 @@
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { OnboardingHeader } from "@/components/ui/onboarding-header";
+import { showToast } from "@/components/ui/toast";
+import { useUpdateProfileMutation } from "@/lib/queries";
 import {
-    Actionsheet,
-    ActionsheetBackdrop,
-    ActionsheetContent,
-    ActionsheetDragIndicator,
-    ActionsheetDragIndicatorWrapper,
-    ActionsheetItem,
-    ActionsheetItemText,
-    Box,
-    Button,
-    ButtonText,
-    Divider,
-    Input,
-    InputField,
-    InputSlot,
-    Pressable,
-    ScrollView,
-    Text,
-    VStack,
+  Actionsheet,
+  ActionsheetBackdrop,
+  ActionsheetContent,
+  ActionsheetDragIndicator,
+  ActionsheetDragIndicatorWrapper,
+  ActionsheetItem,
+  ActionsheetItemText,
+  Box,
+  Button,
+  ButtonSpinner,
+  ButtonText,
+  Divider,
+  Input,
+  InputField,
+  InputSlot,
+  Pressable,
+  ScrollView,
+  Text,
+  VStack,
 } from "@gluestack-ui/themed";
 import { useRouter } from "expo-router";
 import { useState } from "react";
@@ -46,9 +49,9 @@ type SheetType = "status" | "count" | "location" | "age" | null;
 
 export default function ChildrenStatusScreen() {
   const router = useRouter();
+  const updateMutation = useUpdateProfileMutation();
   const [activeSheet, setActiveSheet] = useState<SheetType>(null);
 
-  // States for cascading selections
   const [status, setStatus] = useState<string | null>(null);
   const [count, setCount] = useState<string | null>(null);
   const [location, setLocation] = useState<string | null>(null);
@@ -62,7 +65,6 @@ export default function ChildrenStatusScreen() {
   const handleSelect = (value: string) => {
     if (activeSheet === "status") {
       setStatus(value);
-      // Reset sub-selections if they switch back to "No"
       if (value === "No, I don't have children") {
         setCount(null);
         setLocation(null);
@@ -74,6 +76,24 @@ export default function ChildrenStatusScreen() {
     if (activeSheet === "age") setAge(value);
 
     setActiveSheet(null);
+  };
+
+  const handleContinue = () => {
+    if (!isComplete) return;
+
+    // Map the string selections to the required UserProfile types from your query definitions
+    const payload = {
+      hasChildren,
+      childrenCount: count ? parseInt(count.split(" ")[0]) : 0, // Gets the number out of "5 or more" safely
+      childrenStay: location || "",
+      childrenAgeRangeInYears: age || "",
+    };
+
+    updateMutation.mutate(payload, {
+      onSuccess: () => router.push("/gallery"),
+      onError: (err: any) =>
+        showToast("error", "Error", err?.message || "Failed to save status"),
+    });
   };
 
   const currentOptions =
@@ -112,7 +132,6 @@ export default function ChildrenStatusScreen() {
 
         <ScrollView flex={1} showsVerticalScrollIndicator={false} mt="$8">
           <VStack space="md" pb="$10">
-            {/* 1. Status Dropdown */}
             <Pressable onPress={() => setActiveSheet("status")}>
               <Input
                 size="xl"
@@ -143,17 +162,18 @@ export default function ChildrenStatusScreen() {
                   pt={status ? "$4" : "$0"}
                 />
                 <InputSlot pr="$4">
-                  <IconSymbol
-                    name="chevron.right"
-                    size={20}
-                    color="#1A1A1A"
-                    style={{ transform: [{ rotate: "90deg" }] }}
-                  />
+                  <Box>
+                    <IconSymbol
+                      name="chevron.right"
+                      size={20}
+                      color="#1A1A1A"
+                      style={{ transform: [{ rotate: "90deg" }] }}
+                    />
+                  </Box>
                 </InputSlot>
               </Input>
             </Pressable>
 
-            {/* 2. Count Dropdown (Cascading) */}
             {hasChildren && (
               <Pressable onPress={() => setActiveSheet("count")}>
                 <Input
@@ -185,18 +205,19 @@ export default function ChildrenStatusScreen() {
                     pt={count ? "$4" : "$0"}
                   />
                   <InputSlot pr="$4">
-                    <IconSymbol
-                      name="chevron.right"
-                      size={20}
-                      color="#1A1A1A"
-                      style={{ transform: [{ rotate: "90deg" }] }}
-                    />
+                    <Box>
+                      <IconSymbol
+                        name="chevron.right"
+                        size={20}
+                        color="#1A1A1A"
+                        style={{ transform: [{ rotate: "90deg" }] }}
+                      />
+                    </Box>
                   </InputSlot>
                 </Input>
               </Pressable>
             )}
 
-            {/* 3. Location Dropdown (Cascading) */}
             {hasChildren && count && (
               <Pressable onPress={() => setActiveSheet("location")}>
                 <Input
@@ -228,18 +249,19 @@ export default function ChildrenStatusScreen() {
                     pt={location ? "$4" : "$0"}
                   />
                   <InputSlot pr="$4">
-                    <IconSymbol
-                      name="chevron.right"
-                      size={20}
-                      color="#1A1A1A"
-                      style={{ transform: [{ rotate: "90deg" }] }}
-                    />
+                    <Box>
+                      <IconSymbol
+                        name="chevron.right"
+                        size={20}
+                        color="#1A1A1A"
+                        style={{ transform: [{ rotate: "90deg" }] }}
+                      />
+                    </Box>
                   </InputSlot>
                 </Input>
               </Pressable>
             )}
 
-            {/* 4. Age Dropdown (Cascading) */}
             {hasChildren && location && (
               <Pressable onPress={() => setActiveSheet("age")}>
                 <Input
@@ -271,12 +293,14 @@ export default function ChildrenStatusScreen() {
                     pt={age ? "$4" : "$0"}
                   />
                   <InputSlot pr="$4">
-                    <IconSymbol
-                      name="chevron.right"
-                      size={20}
-                      color="#1A1A1A"
-                      style={{ transform: [{ rotate: "90deg" }] }}
-                    />
+                    <Box>
+                      <IconSymbol
+                        name="chevron.right"
+                        size={20}
+                        color="#1A1A1A"
+                        style={{ transform: [{ rotate: "90deg" }] }}
+                      />
+                    </Box>
                   </InputSlot>
                 </Input>
               </Pressable>
@@ -290,20 +314,23 @@ export default function ChildrenStatusScreen() {
             size="xl"
             bg={isComplete ? "#E86673" : "#F4F3F2"}
             borderRadius="$full"
-            disabled={!isComplete}
-            onPress={() => router.push("/gallery")}
+            disabled={!isComplete || updateMutation.isPending}
+            onPress={handleContinue}
           >
-            <ButtonText
-              fontWeight="$bold"
-              color={isComplete ? "#FFFFFF" : "$textLight400"}
-            >
-              Continue
-            </ButtonText>
+            {updateMutation.isPending ? (
+              <ButtonSpinner color="#FFFFFF" />
+            ) : (
+              <ButtonText
+                fontWeight="$bold"
+                color={isComplete ? "#FFFFFF" : "$textLight400"}
+              >
+                Continue
+              </ButtonText>
+            )}
           </Button>
         </Box>
       </VStack>
 
-      {/* Reusable Bottom Sheet for all selections */}
       <Actionsheet
         isOpen={activeSheet !== null}
         onClose={() => setActiveSheet(null)}
