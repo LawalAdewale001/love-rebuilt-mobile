@@ -335,7 +335,7 @@ export function useConversationQuery(conversationId: string) {
 // ─── Discovery interaction (like/dislike)
 export function useInteractionMutation() {
   return useMutation({
-    mutationFn: (data: { receiverId: string; type: "like" | "dislike" }) =>
+    mutationFn: (data: { receiverId: string; type: "LIKE" | "DISLIKE" }) =>
       apiClient.post("/api/discovery/interaction", data),
   });
 }
@@ -560,10 +560,17 @@ export function useDiscoveryMatchesQuery() {
 }
 
 export function useRecordInteractionMutation() {
+  const queryClient = useQueryClient();
+
   return useMutation({
-    // Changed "action" to "type" to match standard API definitions
-    mutationFn: (data: { targetUserId: string; type: "like" | "pass" }) =>
+    // Changed parameter to receiverId and restricted type to 'like' or 'dislike' based on your API logs
+    mutationFn: (data: { receiverId: string; type: "like" | "dislike" }) =>
       apiClient.post("/api/discovery/interaction", data),
+    onSuccess: () => {
+      // Invalidate the specific query keys you have defined for discovery
+      queryClient.invalidateQueries({ queryKey: queryKeys.discoveryGeneral() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.discoveryMatches() });
+    },
   });
 }
 

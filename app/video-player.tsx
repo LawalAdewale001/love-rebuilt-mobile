@@ -1,8 +1,5 @@
 import { showToast } from "@/components/ui/toast";
-import {
-  useCompleteMiniCourseMutation,
-  useMiniCourseByIdQuery,
-} from "@/lib/queries";
+import { useCompleteMiniCourseMutation } from "@/lib/queries";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Box,
@@ -10,7 +7,6 @@ import {
   ButtonSpinner,
   ButtonText,
   Pressable,
-  Spinner,
   Text,
   VStack,
 } from "@gluestack-ui/themed";
@@ -21,12 +17,17 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function VideoPlayerScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+
+  // Extract data directly from navigation parameters to bypass the API call
+  const { id, videoUrl, title, description } = useLocalSearchParams<{
+    id: string;
+    videoUrl: string;
+    title: string;
+    description: string;
+  }>();
+
   const videoRef = useRef<Video>(null);
-
-  const { data: course, isLoading } = useMiniCourseByIdQuery(id);
   const completeMutation = useCompleteMiniCourseMutation();
-
   const [hasFinished, setHasFinished] = useState(false);
 
   const handlePlaybackStatusUpdate = (status: any) => {
@@ -36,9 +37,10 @@ export default function VideoPlayerScreen() {
   };
 
   const handleComplete = () => {
+    if (!id) return;
+
     completeMutation.mutate(id, {
       onSuccess: () => {
-        // Navigate to the completion success screen!
         router.replace("/course-completed");
       },
       onError: (err: any) => {
@@ -50,16 +52,6 @@ export default function VideoPlayerScreen() {
       },
     });
   };
-
-  if (isLoading) {
-    return (
-      <SafeAreaView
-        style={{ flex: 1, backgroundColor: "#000", justifyContent: "center" }}
-      >
-        <Spinner size="large" color="#E86673" />
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#000" }}>
@@ -76,16 +68,16 @@ export default function VideoPlayerScreen() {
           numberOfLines={1}
           flex={1}
         >
-          {course?.title || "Course"}
+          {title || "Course"}
         </Text>
       </Box>
 
       {/* Video Player Area */}
       <Box flex={1} justifyContent="center" bg="#1A1A1A">
-        {course?.videoUrl ? (
+        {videoUrl ? (
           <Video
             ref={videoRef}
-            source={{ uri: course.videoUrl }}
+            source={{ uri: videoUrl }}
             style={{ width: "100%", height: 300 }}
             useNativeControls
             resizeMode={ResizeMode.CONTAIN}
@@ -107,10 +99,10 @@ export default function VideoPlayerScreen() {
         space="md"
       >
         <Text size="xl" fontWeight="$bold" color="$textLight900">
-          {course?.title}
+          {title || "No Title"}
         </Text>
         <Text color="$textLight500" size="md">
-          {course?.description}
+          {description || "No description provided."}
         </Text>
 
         <Button

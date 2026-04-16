@@ -16,7 +16,6 @@ export default function LearnScreen() {
 
   // Fetching the categories array
   const { data: categories, isLoading, error } = useMiniCoursesQuery();
-  console.log(categories, "data for learn");
 
   if (isLoading) {
     return (
@@ -47,6 +46,24 @@ export default function LearnScreen() {
     );
   }
 
+  // Handle Navigation and pass data via params
+  const handleCoursePress = (
+    id: string,
+    videoUrl: string,
+    title: string,
+    description: string,
+  ) => {
+    router.push({
+      pathname: "/video-player",
+      params: {
+        id,
+        videoUrl,
+        title,
+        description,
+      },
+    });
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
       {/* Header */}
@@ -65,18 +82,15 @@ export default function LearnScreen() {
           {/* Map through the Categories array */}
           {categories?.map((category: CourseCategory) => (
             <VStack key={category.id} space="md">
-              {/* Category Title -> mapped to category.name */}
               <Text px="$6" size="md" fontWeight="$bold" color="$textLight900">
                 {category.name}
               </Text>
 
-              {/* Horizontal Video Carousel */}
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={{ paddingHorizontal: 24, gap: 16 }}
               >
-                {/* Map through the miniCourses array inside this category */}
                 {category.miniCourses?.map((course) => (
                   <Pressable
                     key={course.id}
@@ -86,10 +100,12 @@ export default function LearnScreen() {
                     overflow="hidden"
                     position="relative"
                     onPress={() =>
-                      router.push({
-                        pathname: "/video-player",
-                        params: { id: course.id },
-                      })
+                      handleCoursePress(
+                        course.id,
+                        course.videoUrl,
+                        course.title,
+                        course.description,
+                      )
                     }
                   >
                     <Image

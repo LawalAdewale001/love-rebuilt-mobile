@@ -42,14 +42,24 @@ export default function DiscoverScreen() {
     ? { uri: currentUser.avatar }
     : DEFAULT_AVATAR;
 
+  /* app/(tabs)/index.tsx */
+
+  /* app/(tabs)/index.tsx */
+
   // Handles both Likes and Passes
   const handleInteraction = (targetUserId: string, type: "like" | "pass") => {
+    // Map 'pass' to 'dislike' for the backend
+    const apiType = type === "pass" ? "dislike" : "like";
+
     interactionMutation.mutate(
-      { targetUserId, type }, // Updated to send 'type'
+      {
+        receiverId: targetUserId, // Send as receiverId to fix the 400 error
+        type: apiType,
+      },
       {
         onSuccess: () => {
+          // Use the original 'type' for the toast
           showToast("success", type === "like" ? "Liked!" : "Passed", "");
-          // In a production app, you might want to filter this user out of the local state array here
         },
         onError: (err: any) => {
           showToast(
@@ -311,38 +321,21 @@ export default function DiscoverScreen() {
                         ))}
                       </HStack>
 
-                      {/* Action Buttons: Pass & Like */}
-                      <HStack space="md">
-                        <Pressable
-                          w={48}
-                          h={48}
-                          bg="rgba(0,0,0,0.5)" // Darker bg for Pass
-                          borderRadius="$full"
-                          justifyContent="center"
-                          alignItems="center"
-                          onPress={() => handleInteraction(profile.id, "pass")}
-                        >
-                          <Text color="#FFFFFF" size="xl" fontWeight="$bold">
-                            ✕
-                          </Text>
-                        </Pressable>
-
-                        <Pressable
-                          w={48}
-                          h={48}
-                          bg={PRIMARY_COLOR}
-                          borderRadius="$full"
-                          justifyContent="center"
-                          alignItems="center"
-                          onPress={() => handleInteraction(profile.id, "like")}
-                        >
-                          <Image
-                            source={require("@/assets/images/icon-heart.png")}
-                            style={{ width: 24, height: 24 }}
-                            contentFit="contain"
-                          />
-                        </Pressable>
-                      </HStack>
+                      <Pressable
+                        w={48}
+                        h={48}
+                        bg={PRIMARY_COLOR}
+                        borderRadius="$full"
+                        justifyContent="center"
+                        alignItems="center"
+                        onPress={() => handleInteraction(profile.id, "like")}
+                      >
+                        <Image
+                          source={require("@/assets/images/icon-heart.png")}
+                          style={{ width: 24, height: 24 }}
+                          contentFit="contain"
+                        />
+                      </Pressable>
                     </HStack>
                   </VStack>
                 </Pressable>

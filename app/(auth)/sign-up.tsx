@@ -1,54 +1,90 @@
 import { showToast } from "@/components/ui/toast";
-import { useRegisterMutation } from "@/lib/queries";
+import { useRegisterMutation, useSocialLoginMutation } from "@/lib/queries";
 import { MaterialIcons } from "@expo/vector-icons";
 import {
   Box,
   Button,
   ButtonSpinner,
   ButtonText,
-  Divider,
   HStack,
   Input,
   InputField,
   InputSlot,
   Pressable,
   Text,
-  VStack,
+  VStack
 } from "@gluestack-ui/themed";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView } from "react-native";
 
+// COMMENTED OUT FOR EXPO GO COMPATIBILITY
+// import { GoogleSignin } from "@react-native-google-signin/google-signin";
+// import * as AppleAuthentication from "expo-apple-authentication";
+
 export default function SignUpScreen() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
-
-  // Form State
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
+  const socialLoginMutation = useSocialLoginMutation();
   const registerMutation = useRegisterMutation();
 
+  const isAnyLoading =
+    registerMutation.isPending || socialLoginMutation.isPending;
   const isFormFilled =
     fullName.trim() && email.trim() && password && confirmPassword;
-  const canSubmit = isFormFilled && !registerMutation.isPending;
+  const canSubmit = isFormFilled && !isAnyLoading;
+
+  const handleSocialLogin = async (provider: "google" | "apple") => {
+    // TEMPORARILY DISABLED FOR EXPO GO
+    showToast(
+      "info",
+      "Social Login",
+      `${provider} login is disabled in Expo Go.`,
+    );
+
+    /*
+    try {
+      let token: string | undefined = "";
+      if (provider === "google") {
+        await GoogleSignin.hasPlayServices();
+        const userInfo = await GoogleSignin.signIn();
+        token = userInfo.data?.idToken ?? undefined;
+      } else {
+        const credential = await AppleAuthentication.signInAsync({
+          requestedScopes: [
+            AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+            AppleAuthentication.AppleAuthenticationScope.EMAIL,
+          ],
+        });
+        token = credential.identityToken ?? undefined;
+      }
+
+      if (!token) return;
+
+      socialLoginMutation.mutate({ provider, token }, {
+        onSuccess: () => {
+          connectSocket();
+          router.replace("/(tabs)");
+        },
+        onError: (error) => {
+          showToast("error", "Authentication Failed", error.message);
+        },
+      });
+    } catch (error: any) {
+      console.log(`${provider} error:`, error);
+    }
+    */
+  };
 
   const handleSignUp = () => {
-    if (password !== confirmPassword) {
-      showToast("error", "Validation Error", "Passwords do not match");
-      return;
-    }
-    if (password.length < 6) {
-      showToast(
-        "error",
-        "Validation Error",
-        "Password must be at least 6 characters",
-      );
-      return;
-    }
+    if (password !== confirmPassword)
+      return showToast("error", "Error", "Passwords do not match");
 
     registerMutation.mutate(
       { fullName: fullName.trim(), email: email.trim(), password },
@@ -57,18 +93,15 @@ export default function SignUpScreen() {
           showToast(
             "success",
             "Account Created",
-            "Please verify your email address.",
+            "Check your email to verify.",
           );
-          // Pass the email to the next screen so we know who to verify
           router.push({
             pathname: "/verify-email",
             params: { email: email.trim() },
           });
         },
-        onError: (error: any) => {
-          const message = error?.message || "Registration failed. Try again.";
-          showToast("error", "Sign Up Failed", message);
-        },
+        onError: (error: any) =>
+          showToast("error", "Sign Up Failed", error?.message),
       },
     );
   };
@@ -88,12 +121,10 @@ export default function SignUpScreen() {
                 height: "100%",
                 position: "absolute",
                 top: "30%",
-                left: 0,
               }}
               contentFit="cover"
             />
           </Box>
-
           <Box
             flex={1}
             bg="$white"
@@ -105,57 +136,49 @@ export default function SignUpScreen() {
             mt={-30}
           >
             <VStack space="xl">
-              <Box>
+              <VStack>
                 <Text size="2xl" fontWeight="$bold" color="$textLight900">
                   Create an Account
                 </Text>
                 <Text size="md" color="$textLight600" mt="$1">
                   Start your journey to find love
                 </Text>
-              </Box>
+              </VStack>
 
               <VStack space="md">
                 <Input
                   size="xl"
-                  variant="outline"
                   borderRadius="$xl"
                   bg="#F7F5F4"
                   borderWidth={0}
                 >
                   <InputField
                     placeholder="Full Name"
-                    placeholderTextColor="$textLight400"
                     value={fullName}
                     onChangeText={setFullName}
                   />
                 </Input>
                 <Input
                   size="xl"
-                  variant="outline"
                   borderRadius="$xl"
                   bg="#F7F5F4"
                   borderWidth={0}
                 >
                   <InputField
-                    placeholder="Email Address"
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    placeholderTextColor="$textLight400"
+                    placeholder="Email"
                     value={email}
                     onChangeText={setEmail}
                   />
                 </Input>
                 <Input
                   size="xl"
-                  variant="outline"
                   borderRadius="$xl"
                   bg="#F7F5F4"
                   borderWidth={0}
                 >
                   <InputField
                     type={showPassword ? "text" : "password"}
-                    placeholder="Create Password"
-                    placeholderTextColor="$textLight400"
+                    placeholder="Password"
                     value={password}
                     onChangeText={setPassword}
                   />
@@ -170,68 +193,29 @@ export default function SignUpScreen() {
                     />
                   </InputSlot>
                 </Input>
-                <Input
-                  size="xl"
-                  variant="outline"
-                  borderRadius="$xl"
-                  bg="#F7F5F4"
-                  borderWidth={0}
-                >
-                  <InputField
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Confirm Password"
-                    placeholderTextColor="$textLight400"
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                  />
-                  <InputSlot
-                    pr="$4"
-                    onPress={() => setShowPassword(!showPassword)}
-                  >
-                    <MaterialIcons
-                      name={showPassword ? "visibility-off" : "visibility"}
-                      size={20}
-                      color="#666666"
-                    />
-                  </InputSlot>
-                </Input>
               </VStack>
 
-              <HStack alignItems="center" space="sm" my="$2">
-                <Divider flex={1} />
-                <Text color="$textLight400" size="sm">
-                  or
-                </Text>
-                <Divider flex={1} />
-              </HStack>
-
-              <HStack justifyContent="center" space="lg">
+              <HStack justifyContent="center" space="lg" mt="$4">
                 <Pressable
-                  w={50}
-                  h={50}
-                  bg="$white"
-                  borderRadius="$12.08"
-                  borderWidth={1}
-                  borderColor="$borderLight200"
-                  justifyContent="center"
-                  alignItems="center"
+                  onPress={() => handleSocialLogin("google")}
+                  disabled={isAnyLoading}
                 >
-                  <MaterialIcons
-                    name="g-mobiledata"
-                    size={20}
-                    color="#666666"
+                  <Image
+                    source={require("@/assets/images/google-icon.png")}
+                    style={{ width: 50, height: 50 }}
                   />
                 </Pressable>
-                <Pressable
-                  w={50}
-                  h={50}
-                  bg="$textLight900"
-                  borderRadius="$12.08"
-                  justifyContent="center"
-                  alignItems="center"
-                >
-                  <MaterialIcons name="apple" size={20} color="#FFFFFF" />
-                </Pressable>
+                {Platform.OS === "ios" && (
+                  <Pressable
+                    onPress={() => handleSocialLogin("apple")}
+                    disabled={isAnyLoading}
+                  >
+                    <Image
+                      source={require("@/assets/images/apple-icon.png")}
+                      style={{ width: 50, height: 50 }}
+                    />
+                  </Pressable>
+                )}
               </HStack>
 
               <Button
@@ -245,23 +229,11 @@ export default function SignUpScreen() {
                 {registerMutation.isPending ? (
                   <ButtonSpinner color="#FFFFFF" />
                 ) : (
-                  <ButtonText
-                    fontWeight="$bold"
-                    color={canSubmit ? "#FFFFFF" : "$textLight400"}
-                  >
-                    Create an Account
+                  <ButtonText color={canSubmit ? "#FFFFFF" : "$textLight400"}>
+                    Create Account
                   </ButtonText>
                 )}
               </Button>
-
-              <HStack justifyContent="center" mb="$2">
-                <Text color="$textLight600">Have an Account? </Text>
-                <Pressable onPress={() => router.push("/sign-in")}>
-                  <Text color="#E86673" fontWeight="$bold">
-                    Sign In
-                  </Text>
-                </Pressable>
-              </HStack>
             </VStack>
           </Box>
         </ScrollView>

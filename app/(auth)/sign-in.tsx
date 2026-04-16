@@ -4,7 +4,7 @@ import { ApiError, apiClient } from "@/lib/api-client";
 import { registerForPushNotifications } from "@/lib/push-notifications";
 import { useLoginMutation, useSocialLoginMutation } from "@/lib/queries";
 import { connectSocket } from "@/lib/socket";
-import { Ionicons } from "@expo/vector-icons";
+import { MaterialIcons } from "@expo/vector-icons";
 import {
   Box,
   Button,
@@ -16,7 +16,6 @@ import {
   InputField,
   InputSlot,
   Pressable,
-  Spinner,
   Text,
   VStack,
 } from "@gluestack-ui/themed";
@@ -25,6 +24,10 @@ import { useRouter } from "expo-router";
 import Joi from "joi";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView } from "react-native";
+
+// COMMENTED OUT FOR EXPO GO COMPATIBILITY
+// import { GoogleSignin } from "@react-native-google-signin/google-signin";
+// import * as AppleAuthentication from "expo-apple-authentication";
 
 const loginSchema = Joi.object({
   email: Joi.string()
@@ -46,15 +49,12 @@ export default function SignInScreen() {
 
   const loginMutation = useLoginMutation();
   const socialLoginMutation = useSocialLoginMutation();
-
   const form = useForm({ email: "", password: "" }, loginSchema);
 
+  const isAnyLoading = loginMutation.isPending || socialLoginMutation.isPending;
   const isFormFilled =
     form.values.email.trim().length > 0 &&
     form.values.password.trim().length > 0;
-
-  // Disable regular submit if ANY mutation is running
-  const isAnyLoading = loginMutation.isPending || socialLoginMutation.isPending;
   const canSubmit = isFormFilled && !isAnyLoading;
 
   const emailError = form.getError("email");
@@ -62,14 +62,9 @@ export default function SignInScreen() {
 
   const handleSignIn = () => {
     const validated = form.validate();
-    if (!validated) {
-      const firstError = form.fieldErrors.email ?? form.fieldErrors.password;
-      if (firstError) showToast("error", "Validation Error", firstError);
-      return;
-    }
+    if (!validated) return;
 
     const pushTokenPromise = registerForPushNotifications();
-
     loginMutation.mutate(
       { email: validated.email, password: validated.password },
       {
@@ -77,18 +72,15 @@ export default function SignInScreen() {
           connectSocket();
           router.replace("/(tabs)");
           pushTokenPromise.then((token) => {
-            if (token) {
+            if (token)
               apiClient
                 .patch("/api/user/update", { devicePushToken: token })
                 .catch(() => {});
-            }
           });
         },
         onError: (error) => {
           const message =
-            error instanceof ApiError
-              ? error.message
-              : "Something went wrong. Please try again.";
+            error instanceof ApiError ? error.message : "Something went wrong.";
           showToast("error", "Sign In Failed", message);
         },
       },
@@ -96,53 +88,44 @@ export default function SignInScreen() {
   };
 
   const handleSocialLogin = async (provider: "google" | "apple") => {
-    try {
-      let token = "";
+    // TEMPORARILY DISABLED FOR EXPO GO
+    showToast(
+      "info",
+      "Social Login",
+      `${provider} login is disabled in Expo Go. Use a Dev Build to test.`,
+    );
 
+    /* try {
+      let token: string | undefined = "";
       if (provider === "google") {
-        // TODO: Await your Google Sign-In library execution here to extract the ID token
-        // Example:
-        // await GoogleSignin.hasPlayServices();
-        // const userInfo = await GoogleSignin.signIn();
-        // token = userInfo.idToken;
+        await GoogleSignin.hasPlayServices();
+        const userInfo = await GoogleSignin.signIn();
+        token = userInfo.data?.idToken ?? undefined;
       } else {
-        // TODO: Await your Apple Sign-In library execution here to extract the identityToken
-        // Example:
-        // const credential = await AppleAuthentication.signInAsync({ requestedScopes: [...] });
-        // token = credential.identityToken;
+        const credential = await AppleAuthentication.signInAsync({
+          requestedScopes: [
+            AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+            AppleAuthentication.AppleAuthenticationScope.EMAIL,
+          ],
+        });
+        token = credential.identityToken ?? undefined;
       }
 
-      if (!token) return; // User cancelled the flow
+      if (!token) return;
 
-      const pushTokenPromise = registerForPushNotifications();
-
-      socialLoginMutation.mutate(
-        { provider, token },
-        {
-          onSuccess: () => {
-            connectSocket();
-            router.replace("/(tabs)");
-            pushTokenPromise.then((pushToken) => {
-              if (pushToken) {
-                apiClient
-                  .patch("/api/user/update", { devicePushToken: pushToken })
-                  .catch(() => {});
-              }
-            });
-          },
-          onError: (error) => {
-            const message =
-              error instanceof ApiError
-                ? error.message
-                : `Failed to sign in with ${provider}.`;
-            showToast("error", "Authentication Failed", message);
-          },
+      socialLoginMutation.mutate({ provider, token }, {
+        onSuccess: () => {
+          connectSocket();
+          router.replace("/(tabs)");
         },
-      );
-    } catch (error) {
-      // Handles cases where the user dismisses the native social login modal
-      console.log(`${provider} login cancelled or failed natively:`, error);
+        onError: (error) => {
+          showToast("error", "Authentication Failed", error.message);
+        },
+      });
+    } catch (error: any) {
+      console.log(`${provider} login error:`, error);
     }
+    */
   };
 
   return (
@@ -152,22 +135,13 @@ export default function SignInScreen() {
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={{ flexGrow: 1 }} bounces={false}>
-          {/* Top Graphic Area */}
           <Box h={350} w="100%" position="relative">
             <Image
               source={require("@/assets/images/signup-header-bg.png")}
-              style={{
-                width: "100%",
-                height: "100%",
-                position: "absolute",
-                top: 0,
-                left: 0,
-              }}
+              style={{ width: "100%", height: "100%" }}
               contentFit="cover"
             />
           </Box>
-
-          {/* Bottom Sheet Form */}
           <Box
             flex={1}
             bg="$white"
@@ -179,116 +153,55 @@ export default function SignInScreen() {
             mt={-30}
           >
             <VStack space="xl">
-              <Box>
+              <VStack>
                 <Text size="2xl" fontWeight="$bold" color="$textLight900">
                   Sign In
                 </Text>
                 <Text size="md" color="$textLight600" mt="$1">
                   Continue your love conversation
                 </Text>
-              </Box>
+              </VStack>
 
               <VStack space="md" mt="$4">
-                {/* Email Input */}
-                <Box>
-                  <Input
-                    size="xl"
-                    variant="outline"
-                    borderRadius="$xl"
-                    bg={form.values.email ? "#FFFFFF" : "#F7F5F4"}
-                    borderWidth={emailError ? 1 : form.values.email ? 1 : 0}
-                    borderColor={
-                      emailError
-                        ? "#E86673"
-                        : form.values.email
-                          ? "#1A1A1A"
-                          : "transparent"
-                    }
+                <Input
+                  size="xl"
+                  variant="outline"
+                  borderRadius="$xl"
+                  bg={form.values.email ? "#FFFFFF" : "#F7F5F4"}
+                  borderWidth={emailError ? 1 : 0}
+                  borderColor={emailError ? "#E86673" : "#1A1A1A"}
+                >
+                  <InputField
+                    placeholder="Email Address"
+                    value={form.values.email}
+                    onChangeText={(val) => form.setValue("email", val)}
+                  />
+                </Input>
+                <Input
+                  size="xl"
+                  variant="outline"
+                  borderRadius="$xl"
+                  bg={form.values.password ? "#FFFFFF" : "#F7F5F4"}
+                  borderWidth={passwordError ? 1 : 0}
+                  borderColor={passwordError ? "#E86673" : "#1A1A1A"}
+                >
+                  <InputField
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Password"
+                    value={form.values.password}
+                    onChangeText={(val) => form.setValue("password", val)}
+                  />
+                  <InputSlot
+                    pr="$4"
+                    onPress={() => setShowPassword(!showPassword)}
                   >
-                    {form.values.email ? (
-                      <Text
-                        position="absolute"
-                        top={6}
-                        left={16}
-                        size="xs"
-                        color={emailError ? "#E86673" : "$textLight500"}
-                      >
-                        Email Address
-                      </Text>
-                    ) : null}
-                    <InputField
-                      placeholder={form.values.email ? "" : "Email Address"}
-                      placeholderTextColor="$textLight400"
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      value={form.values.email}
-                      onChangeText={(val: string) =>
-                        form.setValue("email", val)
-                      }
-                      onBlur={() => form.onBlur("email")}
-                      pt={form.values.email ? "$4" : "$0"}
+                    <MaterialIcons
+                      name={showPassword ? "visibility-off" : "visibility"}
+                      size={20}
+                      color="#666666"
                     />
-                  </Input>
-                  {emailError ? (
-                    <Text size="xs" color="#E86673" mt="$1" ml="$2">
-                      {emailError}
-                    </Text>
-                  ) : null}
-                </Box>
-
-                {/* Password Input */}
-                <Box>
-                  <Input
-                    size="xl"
-                    variant="outline"
-                    borderRadius="$xl"
-                    bg={form.values.password ? "#FFFFFF" : "#F7F5F4"}
-                    borderWidth={
-                      passwordError ? 1 : form.values.password ? 1 : 0
-                    }
-                    borderColor={
-                      passwordError
-                        ? "#E86673"
-                        : form.values.password
-                          ? "#1A1A1A"
-                          : "transparent"
-                    }
-                  >
-                    {form.values.password ? (
-                      <Text
-                        position="absolute"
-                        top={6}
-                        left={16}
-                        size="xs"
-                        color={passwordError ? "#E86673" : "$textLight500"}
-                      >
-                        Password
-                      </Text>
-                    ) : null}
-                    <InputField
-                      type={showPassword ? "text" : "password"}
-                      placeholder={form.values.password ? "" : "Enter Password"}
-                      placeholderTextColor="$textLight400"
-                      value={form.values.password}
-                      onChangeText={(val: string) =>
-                        form.setValue("password", val)
-                      }
-                      onBlur={() => form.onBlur("password")}
-                      pt={form.values.password ? "$4" : "$0"}
-                    />
-                    <InputSlot
-                      pr="$4"
-                      onPress={() => setShowPassword(!showPassword)}
-                    >
-                      <Text>👁️</Text>
-                    </InputSlot>
-                  </Input>
-                  {passwordError ? (
-                    <Text size="xs" color="#E86673" mt="$1" ml="$2">
-                      {passwordError}
-                    </Text>
-                  ) : null}
-                </Box>
+                  </InputSlot>
+                </Input>
               </VStack>
 
               <HStack alignItems="center" space="sm" my="$2">
@@ -299,50 +212,25 @@ export default function SignInScreen() {
                 <Divider flex={1} />
               </HStack>
 
-              {/* Social Login Buttons */}
               <HStack justifyContent="center" space="lg">
                 <Pressable
-                  w={50}
-                  h={50}
-                  bg="$white"
-                  borderRadius="$full"
-                  borderWidth={1}
-                  borderColor="$borderLight200"
-                  justifyContent="center"
-                  alignItems="center"
                   onPress={() => handleSocialLogin("google")}
                   disabled={isAnyLoading}
                 >
-                  {socialLoginMutation.isPending &&
-                  socialLoginMutation.variables?.provider === "google" ? (
-                    <Spinner size="small" color="#1A1A1A" />
-                  ) : (
-                    <Image
-                      source={{
-                        uri: "https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg",
-                      }}
-                      style={{ width: 24, height: 24 }}
-                    />
-                  )}
+                  <Image
+                    source={require("@/assets/images/google-icon.png")}
+                    style={{ width: 50, height: 50 }}
+                  />
                 </Pressable>
-
                 {Platform.OS === "ios" && (
                   <Pressable
-                    w={50}
-                    h={50}
-                    bg="$textLight900"
-                    borderRadius="$full"
-                    justifyContent="center"
-                    alignItems="center"
                     onPress={() => handleSocialLogin("apple")}
                     disabled={isAnyLoading}
                   >
-                    {socialLoginMutation.isPending &&
-                    socialLoginMutation.variables?.provider === "apple" ? (
-                      <Spinner size="small" color="#FFFFFF" />
-                    ) : (
-                      <Ionicons name="logo-apple" size={24} color="#FFFFFF" />
-                    )}
+                    <Image
+                      source={require("@/assets/images/apple-icon.png")}
+                      style={{ width: 50, height: 50 }}
+                    />
                   </Pressable>
                 )}
               </HStack>
@@ -354,41 +242,15 @@ export default function SignInScreen() {
                 mt="$4"
                 disabled={!canSubmit}
                 onPress={handleSignIn}
-                style={
-                  canSubmit
-                    ? {
-                        shadowColor: "#000",
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.15,
-                        shadowRadius: 6,
-                        elevation: 3,
-                      }
-                    : {}
-                }
               >
                 {loginMutation.isPending ? (
                   <ButtonSpinner color="#FFFFFF" />
                 ) : (
-                  <ButtonText
-                    fontWeight="$bold"
-                    color={canSubmit ? "#FFFFFF" : "$textLight400"}
-                  >
+                  <ButtonText color={canSubmit ? "#FFFFFF" : "$textLight400"}>
                     Sign In
                   </ButtonText>
                 )}
               </Button>
-
-              <HStack justifyContent="center" mb="$2">
-                <Text color="$textLight600">Don't have an Account? </Text>
-                <Pressable
-                  onPress={() => router.push("/sign-up")}
-                  disabled={isAnyLoading}
-                >
-                  <Text color="#E86673" fontWeight="$bold">
-                    Create an Account
-                  </Text>
-                </Pressable>
-              </HStack>
             </VStack>
           </Box>
         </ScrollView>
