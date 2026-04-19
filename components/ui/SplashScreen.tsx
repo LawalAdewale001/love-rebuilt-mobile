@@ -1,5 +1,5 @@
 import React from "react";
-import { ImageBackground, StatusBar, StyleSheet, View } from "react-native";
+import { Image, StatusBar, StyleSheet, View } from "react-native";
 
 export default function SplashScreen() {
   return (
@@ -9,9 +9,12 @@ export default function SplashScreen() {
         transparent
         backgroundColor="transparent"
       />
-      <ImageBackground
+      {/* Using a standard Image instead of ImageBackground allows us 
+        to apply exact absolute coordinates without layout constraints.
+      */}
+      <Image
         source={require("@/assets/images/bg-image.png")}
-        style={styles.bgWrapper}
+        style={styles.bgImage}
         resizeMode="contain"
       />
     </View>
@@ -21,12 +24,17 @@ export default function SplashScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#E86673",
+    backgroundColor: "#E86A7A",
     justifyContent: "center",
     alignItems: "center",
+    position: "relative",
   },
-  bgWrapper: {
-    width: "100%",
-    height: "100%",
+  bgImage: {
+    position: "absolute",
+    width: 635.71,
+    height: 646.31,
+
+    bottom: 0,
+    resizeMode: "contain",
   },
 });

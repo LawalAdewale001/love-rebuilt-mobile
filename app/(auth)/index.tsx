@@ -1,13 +1,6 @@
 import { useRouter } from "expo-router";
 import React from "react";
-import {
-  Image,
-  ImageBackground,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function WelcomeScreen() {
@@ -15,46 +8,47 @@ export default function WelcomeScreen() {
 
   return (
     <View style={styles.outerContainer}>
-      <ImageBackground
+      {/* Absolutely positioned background image. 
+        Rendered first so it sits behind the SafeAreaView content.
+      */}
+      <Image
         source={require("@/assets/images/bg-image.png")}
-        style={styles.background}
-        // Use imageStyle to control the actual image rendering
-        imageStyle={styles.bgImageContent}
+        style={styles.bgImage}
         resizeMode="contain"
-      >
-        <SafeAreaView style={styles.container}>
-          <View style={styles.header}>
-            <Image
-              source={require("@/assets/logo.png")}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-            <TouchableOpacity
-              style={styles.signInBtn}
-              onPress={() => router.push("/sign-in")}
-            >
-              <Text style={styles.signInText}>Sign In</Text>
-            </TouchableOpacity>
-          </View>
+      />
 
-          <View style={styles.heroSection}>
-            <Text style={styles.title}>
-              Everyone deserves{"\n"}another chance at love.
-            </Text>
-          </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Image
+            source={require("@/assets/logo.png")}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          <TouchableOpacity
+            style={styles.signInBtn}
+            onPress={() => router.push("/sign-in")}
+          >
+            <Text style={styles.signInText}>Sign In</Text>
+          </TouchableOpacity>
+        </View>
 
-          <View style={{ flex: 1 }} />
+        <View style={styles.heroSection}>
+          <Text style={styles.title}>
+            Everyone deserves{"\n"}another chance at love.
+          </Text>
+        </View>
 
-          <View style={styles.footer}>
-            <TouchableOpacity
-              style={styles.primaryBtn}
-              onPress={() => router.push("/sign-up")}
-            >
-              <Text style={styles.primaryBtnText}>Create an Account</Text>
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-      </ImageBackground>
+        <View style={{ flex: 1 }} />
+
+        <View style={styles.footer}>
+          <TouchableOpacity
+            style={styles.primaryBtn}
+            onPress={() => router.push("/sign-up")}
+          >
+            <Text style={styles.primaryBtnText}>Create an Account</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     </View>
   );
 }
@@ -62,16 +56,18 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
   outerContainer: {
     flex: 1,
-    backgroundColor: "#E86673",
+    backgroundColor: "#E86A7A",
+    justifyContent: "center",
+    alignItems: "center",
+    position: "relative",
   },
-  background: {
-    flex: 1,
-  },
-  bgImageContent: {
-    // This ensures the image stays at its natural aspect ratio
-    // and is centered within the ImageBackground view
-    width: "100%",
-    height: "100%",
+  bgImage: {
+    position: "absolute",
+    width: 635.71,
+    height: 646.31,
+
+    bottom: 0,
+    resizeMode: "contain",
   },
   container: {
     flex: 1,

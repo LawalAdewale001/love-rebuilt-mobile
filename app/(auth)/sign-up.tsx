@@ -6,18 +6,21 @@ import {
   Button,
   ButtonSpinner,
   ButtonText,
+  Divider,
   HStack,
   Input,
   InputField,
   InputSlot,
   Pressable,
+  Spinner,
   Text,
-  VStack
+  VStack,
 } from "@gluestack-ui/themed";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 // COMMENTED OUT FOR EXPO GO COMPATIBILITY
 // import { GoogleSignin } from "@react-native-google-signin/google-signin";
@@ -26,6 +29,8 @@ import { KeyboardAvoidingView, Platform, ScrollView } from "react-native";
 export default function SignUpScreen() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
+
+  // Form State
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,10 +39,11 @@ export default function SignUpScreen() {
   const socialLoginMutation = useSocialLoginMutation();
   const registerMutation = useRegisterMutation();
 
-  const isAnyLoading =
-    registerMutation.isPending || socialLoginMutation.isPending;
   const isFormFilled =
     fullName.trim() && email.trim() && password && confirmPassword;
+
+  const isAnyLoading =
+    registerMutation.isPending || socialLoginMutation.isPending;
   const canSubmit = isFormFilled && !isAnyLoading;
 
   const handleSocialLogin = async (provider: "google" | "apple") => {
@@ -47,44 +53,21 @@ export default function SignUpScreen() {
       "Social Login",
       `${provider} login is disabled in Expo Go.`,
     );
-
-    /*
-    try {
-      let token: string | undefined = "";
-      if (provider === "google") {
-        await GoogleSignin.hasPlayServices();
-        const userInfo = await GoogleSignin.signIn();
-        token = userInfo.data?.idToken ?? undefined;
-      } else {
-        const credential = await AppleAuthentication.signInAsync({
-          requestedScopes: [
-            AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-            AppleAuthentication.AppleAuthenticationScope.EMAIL,
-          ],
-        });
-        token = credential.identityToken ?? undefined;
-      }
-
-      if (!token) return;
-
-      socialLoginMutation.mutate({ provider, token }, {
-        onSuccess: () => {
-          connectSocket();
-          router.replace("/(tabs)");
-        },
-        onError: (error) => {
-          showToast("error", "Authentication Failed", error.message);
-        },
-      });
-    } catch (error: any) {
-      console.log(`${provider} error:`, error);
-    }
-    */
   };
 
   const handleSignUp = () => {
-    if (password !== confirmPassword)
-      return showToast("error", "Error", "Passwords do not match");
+    if (password !== confirmPassword) {
+      showToast("error", "Validation Error", "Passwords do not match");
+      return;
+    }
+    if (password.length < 6) {
+      showToast(
+        "error",
+        "Validation Error",
+        "Password must be at least 6 characters",
+      );
+      return;
+    }
 
     registerMutation.mutate(
       { fullName: fullName.trim(), email: email.trim(), password },
@@ -93,41 +76,68 @@ export default function SignUpScreen() {
           showToast(
             "success",
             "Account Created",
-            "Check your email to verify.",
+            "Please verify your email address.",
           );
           router.push({
             pathname: "/verify-email",
             params: { email: email.trim() },
           });
         },
-        onError: (error: any) =>
-          showToast("error", "Sign Up Failed", error?.message),
+        onError: (error: any) => {
+          const message = error?.message || "Registration failed. Try again.";
+          showToast("error", "Sign Up Failed", message);
+        },
       },
     );
   };
 
   return (
-    <Box flex={1} bg="#E86673">
+    <Box flex={1} bg="#FFFBFB">
+      {/* Split Background Trick: Protects the top safe area and image blending with red */}
+      <Box
+        position="absolute"
+        top={0}
+        left={0}
+        right={0}
+        h="50%"
+        bg="#E86673"
+      />
+
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={{ flexGrow: 1 }} bounces={false}>
-          <Box h={300} w="100%" position="relative">
+          {/* Top Graphic Area */}
+          <Box h={350} w="100%" position="relative">
             <Image
               source={require("@/assets/images/signup-header-bg.png")}
               style={{
                 width: "100%",
                 height: "100%",
                 position: "absolute",
-                top: "30%",
+                top: 0,
+                left: 0,
               }}
               contentFit="cover"
             />
+            {/* Logo overlay at the top left */}
+            <SafeAreaView
+              edges={["top"]}
+              style={{ position: "absolute", top: 16, left: 24 }}
+            >
+              <Image
+                source={require("@/assets/logo.png")}
+                style={{ width: 120, height: 40 }}
+                contentFit="contain"
+              />
+            </SafeAreaView>
           </Box>
+
+          {/* Bottom Sheet Form */}
           <Box
             flex={1}
-            bg="$white"
+            bg="#FFFBFB"
             borderTopLeftRadius={30}
             borderTopRightRadius={30}
             px="$6"
@@ -136,104 +146,258 @@ export default function SignUpScreen() {
             mt={-30}
           >
             <VStack space="xl">
-              <VStack>
+              <Box>
                 <Text size="2xl" fontWeight="$bold" color="$textLight900">
                   Create an Account
                 </Text>
                 <Text size="md" color="$textLight600" mt="$1">
                   Start your journey to find love
                 </Text>
-              </VStack>
+              </Box>
 
-              <VStack space="md">
-                <Input
-                  size="xl"
-                  borderRadius="$xl"
-                  bg="#F7F5F4"
-                  borderWidth={0}
-                >
-                  <InputField
-                    placeholder="Full Name"
-                    value={fullName}
-                    onChangeText={setFullName}
-                  />
-                </Input>
-                <Input
-                  size="xl"
-                  borderRadius="$xl"
-                  bg="#F7F5F4"
-                  borderWidth={0}
-                >
-                  <InputField
-                    placeholder="Email"
-                    value={email}
-                    onChangeText={setEmail}
-                  />
-                </Input>
-                <Input
-                  size="xl"
-                  borderRadius="$xl"
-                  bg="#F7F5F4"
-                  borderWidth={0}
-                >
-                  <InputField
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Password"
-                    value={password}
-                    onChangeText={setPassword}
-                  />
-                  <InputSlot
-                    pr="$4"
-                    onPress={() => setShowPassword(!showPassword)}
+              <VStack space="md" mt="$4">
+                {/* Full Name Input */}
+                <Box>
+                  <Input
+                    size="xl"
+                    variant="outline"
+                    borderRadius="$xl"
+                    bg="#F5EFEA"
+                    borderWidth={fullName ? 1.5 : 0}
+                    borderColor={fullName ? "#1D1D1D" : "transparent"}
                   >
-                    <MaterialIcons
-                      name={showPassword ? "visibility-off" : "visibility"}
-                      size={20}
-                      color="#666666"
+                    {fullName ? (
+                      <Text
+                        position="absolute"
+                        top={6}
+                        left={16}
+                        size="xs"
+                        color="$textLight500"
+                      >
+                        Full Name
+                      </Text>
+                    ) : null}
+                    <InputField
+                      placeholder={fullName ? "" : "Full Name"}
+                      placeholderTextColor="$textLight400"
+                      value={fullName}
+                      onChangeText={setFullName}
+                      pt={fullName ? "$4" : "$0"}
                     />
-                  </InputSlot>
-                </Input>
+                  </Input>
+                </Box>
+
+                {/* Email Input */}
+                <Box>
+                  <Input
+                    size="xl"
+                    variant="outline"
+                    borderRadius="$xl"
+                    bg="#F5EFEA"
+                    borderWidth={email ? 1.5 : 0}
+                    borderColor={email ? "#1D1D1D" : "transparent"}
+                  >
+                    {email ? (
+                      <Text
+                        position="absolute"
+                        top={6}
+                        left={16}
+                        size="xs"
+                        color="$textLight500"
+                      >
+                        Email Address
+                      </Text>
+                    ) : null}
+                    <InputField
+                      placeholder={email ? "" : "Email Address"}
+                      placeholderTextColor="$textLight400"
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      value={email}
+                      onChangeText={setEmail}
+                      pt={email ? "$4" : "$0"}
+                    />
+                  </Input>
+                </Box>
+
+                {/* Password Input */}
+                <Box>
+                  <Input
+                    size="xl"
+                    variant="outline"
+                    borderRadius="$xl"
+                    bg="#F5EFEA"
+                    borderWidth={password ? 1.5 : 0}
+                    borderColor={password ? "#1D1D1D" : "transparent"}
+                  >
+                    {password ? (
+                      <Text
+                        position="absolute"
+                        top={6}
+                        left={16}
+                        size="xs"
+                        color="$textLight500"
+                      >
+                        Create Password
+                      </Text>
+                    ) : null}
+                    <InputField
+                      type={showPassword ? "text" : "password"}
+                      placeholder={password ? "" : "Create Password"}
+                      placeholderTextColor="$textLight400"
+                      value={password}
+                      onChangeText={setPassword}
+                      pt={password ? "$4" : "$0"}
+                    />
+                    <InputSlot
+                      pr="$4"
+                      onPress={() => setShowPassword(!showPassword)}
+                    >
+                      <MaterialIcons
+                        name={showPassword ? "visibility-off" : "visibility"}
+                        size={20}
+                        color="#666666"
+                      />
+                    </InputSlot>
+                  </Input>
+                </Box>
+
+                {/* Confirm Password Input */}
+                <Box>
+                  <Input
+                    size="xl"
+                    variant="outline"
+                    borderRadius="$xl"
+                    bg="#F5EFEA"
+                    borderWidth={confirmPassword ? 1.5 : 0}
+                    borderColor={confirmPassword ? "#1D1D1D" : "transparent"}
+                  >
+                    {confirmPassword ? (
+                      <Text
+                        position="absolute"
+                        top={6}
+                        left={16}
+                        size="xs"
+                        color="$textLight500"
+                      >
+                        Confirm Password
+                      </Text>
+                    ) : null}
+                    <InputField
+                      type={showPassword ? "text" : "password"}
+                      placeholder={confirmPassword ? "" : "Confirm Password"}
+                      placeholderTextColor="$textLight400"
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                      pt={confirmPassword ? "$4" : "$0"}
+                    />
+                    <InputSlot
+                      pr="$4"
+                      onPress={() => setShowPassword(!showPassword)}
+                    >
+                      <MaterialIcons
+                        name={showPassword ? "visibility-off" : "visibility"}
+                        size={20}
+                        color="#666666"
+                      />
+                    </InputSlot>
+                  </Input>
+                </Box>
               </VStack>
 
-              <HStack justifyContent="center" space="lg" mt="$4">
+              <HStack alignItems="center" space="sm">
+                <Divider flex={1} />
+                <Text color="$textLight400" size="sm">
+                  or
+                </Text>
+                <Divider flex={1} />
+              </HStack>
+
+              {/* Social Login Buttons */}
+              <HStack justifyContent="center" space="lg">
                 <Pressable
+                  w={60}
+                  h={60}
+                  bg="#FFFFFF"
+                  borderRadius="$full"
+                  borderWidth={1}
+                  borderColor="#EAEAEA"
+                  justifyContent="center"
+                  alignItems="center"
                   onPress={() => handleSocialLogin("google")}
                   disabled={isAnyLoading}
                 >
-                  <Image
-                    source={require("@/assets/images/google-icon.png")}
-                    style={{ width: 50, height: 50 }}
-                  />
+                  {socialLoginMutation.isPending &&
+                  socialLoginMutation.variables?.provider === "google" ? (
+                    <Spinner size="small" color="#1A1A1A" />
+                  ) : (
+                    <Image
+                      source={require("@/assets/images/google-icon.png")}
+                      style={{ width: 24, height: 24 }}
+                      contentFit="contain"
+                    />
+                  )}
                 </Pressable>
+
                 {Platform.OS === "ios" && (
                   <Pressable
+                    w={60}
+                    h={60}
+                    bg="#FFFFFF"
+                    borderRadius="$full"
+                    borderWidth={1}
+                    borderColor="#EAEAEA"
+                    justifyContent="center"
+                    alignItems="center"
                     onPress={() => handleSocialLogin("apple")}
                     disabled={isAnyLoading}
                   >
-                    <Image
-                      source={require("@/assets/images/apple-icon.png")}
-                      style={{ width: 50, height: 50 }}
-                    />
+                    {socialLoginMutation.isPending &&
+                    socialLoginMutation.variables?.provider === "apple" ? (
+                      <Spinner size="small" color="#FFFFFF" />
+                    ) : (
+                      <Image
+                        source={require("@/assets/images/apple-icon.png")}
+                        style={{ width: 24, height: 24 }}
+                        contentFit="contain"
+                      />
+                    )}
                   </Pressable>
                 )}
               </HStack>
 
+              {/* Main Action Button */}
               <Button
                 size="xl"
-                bg={canSubmit ? "#E86673" : "#F4F3F2"}
+                bg={canSubmit ? "#E86A7A" : "#F5EFEA"}
                 borderRadius="$full"
-                mt="$4"
                 disabled={!canSubmit}
                 onPress={handleSignUp}
               >
                 {registerMutation.isPending ? (
                   <ButtonSpinner color="#FFFFFF" />
                 ) : (
-                  <ButtonText color={canSubmit ? "#FFFFFF" : "$textLight400"}>
-                    Create Account
+                  <ButtonText
+                    fontWeight="$bold"
+                    color={canSubmit ? "#FFFFFF" : "#CFCFCF"}
+                  >
+                    Create an Account
                   </ButtonText>
                 )}
               </Button>
+
+              {/* Footer Links */}
+              <HStack justifyContent="center" mb="$4">
+                <Text color="#1D1D1D">Have an Account? </Text>
+                <Pressable
+                  onPress={() => router.push("/sign-in")}
+                  disabled={isAnyLoading}
+                >
+                  <Text color="#E86A7A" fontWeight="$bold">
+                    Sign In
+                  </Text>
+                </Pressable>
+              </HStack>
             </VStack>
           </Box>
         </ScrollView>
