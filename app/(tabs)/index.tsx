@@ -215,6 +215,7 @@ export default function DiscoverScreen() {
                   <Image
                     source={{
                       uri:
+                        profile.avatar ||
                         profile.pictures?.[0] ||
                         "https://via.placeholder.com/400",
                     }}
