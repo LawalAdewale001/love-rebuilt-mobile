@@ -444,10 +444,10 @@ export default function ChatConversationScreen() {
   })).current;
 
   // ── Questionnaire helpers ──────────────────────────────────────────────────
-  const openQuestionnaire = () => {
+  const openQuestionnaire = useCallback(() => {
     setQuestionnaireStep("question"); setSelectedOptions([]); setShowQuestionnaire(true);
     Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 65, friction: 11 }).start();
-  };
+  }, [slideAnim]);
 
   const closeQuestionnaire = () => {
     Animated.timing(slideAnim, { toValue: SCREEN_HEIGHT, duration: 250, useNativeDriver: true })
@@ -622,9 +622,9 @@ export default function ChatConversationScreen() {
     const partnerCount = apiMessages.filter(m => !m.sent).length;
     
     if (myCount >= 5 && partnerCount >= 5) {
-      setShowQuestionnaire(true);
+      openQuestionnaire();
     }
-  }, [apiMessages.length, isGroup, conversation?.showChatProgressBanner, showQuestionnaire]);
+  }, [apiMessages.length, isGroup, conversation?.showChatProgressBanner, showQuestionnaire, openQuestionnaire]);
 
   const handleProgressSubmit = async (reason: string) => {
     try {
