@@ -120,11 +120,30 @@ export default function NotificationsScreen() {
                         {item.body}
                       </Text>
                       <Box mt="$2">
-                        <Box alignSelf="flex-start" bg="#FDECEE" py="$2" px="$4" borderRadius="$full">
-                          <Text color={PRIMARY_COLOR} fontWeight="500" size="sm">
-                            {item.type === "match" ? "View Profile" : "View Matches"}
-                          </Text>
-                        </Box>
+                        {item.type === "match" ? (
+                          <Box alignSelf="flex-start" bg="#FDECEE" py="$2" px="$4" borderRadius="$full">
+                            <Text color={PRIMARY_COLOR} fontWeight="500" size="sm">
+                              View Profile
+                            </Text>
+                          </Box>
+                        ) : !item.isRead ? (
+                          <Pressable
+                            onPress={() => {
+                              if (!item.isRead) {
+                                markReadMutation.mutate(item.id);
+                              }
+                            }}
+                          >
+                            <Box alignSelf="flex-start" bg="#FDECEE" py="$2" px="$4" borderRadius="$full">
+                              <HStack space="xs" alignItems="center">
+                                <Ionicons name="checkmark-done" size={16} color={PRIMARY_COLOR} />
+                                <Text color={PRIMARY_COLOR} fontWeight="500" size="sm">
+                                  Mark as read
+                                </Text>
+                              </HStack>
+                            </Box>
+                          </Pressable>
+                        ) : null}
                       </Box>
                     </VStack>
 
