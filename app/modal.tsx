@@ -24,6 +24,7 @@ import { Platform, Switch } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const LOOKING_FOR_OPTIONS = ["Long-term relationship", "New friends", "A Wife"];
+const CHILDREN_OPTIONS = ["No Preference", "Have Children", "No Children", "Want Children"];
 
 export default function FilterModalScreen() {
   const router = useRouter();
@@ -51,7 +52,9 @@ export default function FilterModalScreen() {
       if (prefs.maxAge) setAgeTo(String(prefs.maxAge));
       if (prefs.maxDistance) setDistance(String(prefs.maxDistance));
       if (prefs.lookingFor) setLookingFor(prefs.lookingFor);
-      if (typeof prefs.onlyVerified === "boolean")
+      if (typeof prefs.showOnlyVerified === "boolean")
+        setOnlyVerified(prefs.showOnlyVerified);
+      else if (typeof prefs.onlyVerified === "boolean")
         setOnlyVerified(prefs.onlyVerified);
       if (prefs.childrenPreference) setChildrenPref(prefs.childrenPreference);
     }
@@ -72,7 +75,7 @@ export default function FilterModalScreen() {
       maxAge: parseInt(ageTo) || 30,
       maxDistance: parseInt(distance) || 50,
       lookingFor,
-      onlyVerified,
+      showOnlyVerified: onlyVerified,
       childrenPreference: childrenPref,
     };
 
@@ -286,32 +289,36 @@ export default function FilterModalScreen() {
                 Indicate your preference regarding children
               </Text>
 
-              <Pressable mt="$2">
-                <Input
-                  size="xl"
-                  variant="outline"
-                  borderRadius="$xl"
-                  bg="#F7F5F4"
-                  borderWidth={1}
-                  borderColor="#1A1A1A"
-                  h={65}
-                  isReadOnly
-                >
-                  <VStack pl="$4" py="$1.5" justifyContent="center">
-                    <Text size="xs" color="$textLight500">
-                      Children Preference
-                    </Text>
-                    <InputField
-                      p={0}
-                      h={24}
-                      value={childrenPref}
-                      fontWeight="$bold"
-                      size="md"
-                      pointerEvents="none" // Can be tied to an ActionSheet later if needed
-                    />
-                  </VStack>
-                </Input>
-              </Pressable>
+              <VStack space="lg" mt="$4">
+                {CHILDREN_OPTIONS.map((opt) => {
+                  const isChecked = childrenPref === opt;
+                  return (
+                    <Pressable key={opt} onPress={() => setChildrenPref(opt)}>
+                      <HStack alignItems="center" space="md">
+                        <Box
+                          w={24}
+                          h={24}
+                          borderRadius={12}
+                          borderWidth={isChecked ? 0 : 1}
+                          borderColor={isChecked ? "transparent" : "#E86673"}
+                          bg={isChecked ? "#E86673" : "transparent"}
+                          justifyContent="center"
+                          alignItems="center"
+                        >
+                          {isChecked && (
+                            <Text color="#FFFFFF" size="sm" fontWeight="bold">
+                              ✓
+                            </Text>
+                          )}
+                        </Box>
+                        <Text size="md" color="$textLight900">
+                          {opt}
+                        </Text>
+                      </HStack>
+                    </Pressable>
+                  );
+                })}
+              </VStack>
             </VStack>
 
             {/* Show Only Verified Toggle */}

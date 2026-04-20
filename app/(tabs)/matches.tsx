@@ -130,7 +130,7 @@ export default function MatchesScreen() {
                         style={{ width: 16, height: 16 }}
                         contentFit="contain"
                       />
-                      <Text fontWeight="$semibold" size="sm" color="#1A1A1A">
+                      <Text fontWeight="500" fontSize={12} color="#1D1D1D">
                         {match.relationshipGoal || "Open to Dating"}
                       </Text>
                     </HStack>
@@ -162,13 +162,13 @@ export default function MatchesScreen() {
                         style={{ width: 16, height: 16 }}
                         contentFit="contain"
                       />
-                      <Text color="#FFFFFF" size="sm" fontWeight="$medium">
+                      <Text color="#FFFFFF" fontSize={12} fontWeight="400" lineHeight={22}>
                         {match.location || "Unknown Location"}
                       </Text>
                     </HStack>
 
                     <HStack space="xs" alignItems="center" mb="$3">
-                      <Text color="#FFFFFF" size="3xl" fontWeight="$bold">
+                      <Text color="#FFFFFF" fontSize={17} fontWeight="600" lineHeight={22}>
                         {match.fullName?.split(" ")[0]}
                         {age ? `, ${age}` : ""}
                       </Text>
@@ -186,25 +186,57 @@ export default function MatchesScreen() {
                       alignItems="center"
                       justifyContent="space-between"
                     >
-                      <HStack space="sm" flexWrap="wrap" flex={1}>
-                        {match.interests?.slice(0, 3).map((tag) => (
-                          <Box
-                            key={tag}
-                            bg="rgba(255,255,255,0.2)"
-                            px="$4"
-                            py="$2"
-                            borderRadius="$full"
-                          >
-                            <Text
-                              color="#FFFFFF"
-                              size="sm"
-                              fontWeight="$medium"
-                            >
-                              {tag}
-                            </Text>
-                          </Box>
-                        ))}
-                      </HStack>
+                      <Box flex={1}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                          <HStack space="sm" flexWrap="nowrap" alignItems="center">
+                            {(() => {
+                              const displayTags = match.interests?.length 
+                                ? match.interests 
+                                : [match.religion, match.tribe, match.childrenStatus].filter(Boolean);
+
+                              return (
+                                <>
+                                  {displayTags.slice(0, 2).map((tag: string, idx: number) => (
+                                    <Box
+                                      key={idx}
+                                      bg="rgba(255,255,255,0.2)"
+                                      px="$4"
+                                      py="$2"
+                                      borderRadius="$full"
+                                    >
+                                      <Text
+                                        color="#FFFFFF"
+                                        fontSize={12}
+                                        fontWeight="500"
+                                        lineHeight={22}
+                                      >
+                                        {tag}
+                                      </Text>
+                                    </Box>
+                                  ))}
+                                  {displayTags.length > 2 && (
+                                    <Box
+                                      bg="rgba(255,255,255,0.2)"
+                                      px="$4"
+                                      py="$2"
+                                      borderRadius="$full"
+                                    >
+                                      <Text
+                                        color="#FFFFFF"
+                                        fontSize={12}
+                                        fontWeight="500"
+                                        lineHeight={22}
+                                      >
+                                        +{displayTags.length - 2}
+                                      </Text>
+                                    </Box>
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </HStack>
+                        </ScrollView>
+                      </Box>
 
                       {/* We can route them to chat when clicking the heart on the matches tab since they already matched */}
                       <Pressable

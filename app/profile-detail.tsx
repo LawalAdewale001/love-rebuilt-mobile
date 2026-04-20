@@ -1,5 +1,6 @@
 import { PRIMARY_COLOR } from "@/constants/theme";
-import { useUserProfileByIdQuery } from "@/lib/queries";
+import { useUserProfileByIdQuery, useRecordInteractionMutation, useLikedProfiles } from "@/lib/queries";
+import { showToast } from "@/components/ui/toast";
 import {
   Box,
   Button,
@@ -14,6 +15,8 @@ import {
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { useState } from "react";
 
 const TagPill = ({ text }: { text: string }) => (
   <Box bg="#F7F5F4" px="$4" py="$2" borderRadius="$full">
@@ -26,6 +29,27 @@ const TagPill = ({ text }: { text: string }) => (
 export default function ProfileDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>(); // Grab ID from router params
+
+  const { likedProfiles, toggleLike } = useLikedProfiles();
+  const isLiked = !!likedProfiles[id || ""];
+  const interactionMutation = useRecordInteractionMutation();
+
+  const handleInteraction = (targetUserId: string, type: "like" | "dislike") => {
+    interactionMutation.mutate(
+      {
+        receiverId: targetUserId,
+        type,
+      },
+      {
+        onSuccess: () => {
+          showToast("success", type === "like" ? "Liked!" : "Unliked", "");
+        },
+        onError: (err: any) => {
+          showToast("error", "Error", err?.message || "Failed to record interaction");
+        },
+      }
+    );
+  };
 
   // Fetch user data based on the ID
   const { data: profile, isLoading, error } = useUserProfileByIdQuery(id || "");
@@ -148,7 +172,7 @@ export default function ProfileDetailScreen() {
                   style={{ width: 16, height: 16 }}
                   contentFit="contain"
                 />
-                <Text fontWeight="$semibold" size="sm" color="#1A1A1A">
+                <Text fontWeight="500" fontSize={12} color="#1D1D1D">
                   {profile.relationshipGoal || "Open to Dating"}
                 </Text>
               </HStack>
@@ -180,13 +204,13 @@ export default function ProfileDetailScreen() {
                   style={{ width: 16, height: 16 }}
                   contentFit="contain"
                 />
-                <Text color="#FFFFFF" size="sm" fontWeight="$medium">
+                <Text color="#FFFFFF" fontSize={12} fontWeight="400" lineHeight={22}>
                   {profile.location || "Unknown Location"}
                 </Text>
               </HStack>
 
               <HStack space="xs" alignItems="center" mb="$3">
-                <Text color="#FFFFFF" size="2xl" fontWeight="$bold">
+                <Text color="#FFFFFF" fontSize={17} fontWeight="600" lineHeight={22}>
                   {profile.fullName}, {age}
                 </Text>
                 {profile.isVerified && (
@@ -196,6 +220,69 @@ export default function ProfileDetailScreen() {
                     contentFit="contain"
                   />
                 )}
+              </HStack>
+
+              <HStack space="md" alignItems="center" justifyContent="space-between">
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+                  <HStack space="sm" flexWrap="nowrap" flex={1} alignItems="center">
+                    {profile.interests?.slice(0, 2).map((tag: string, idx: number) => (
+                      <Box
+                        key={idx}
+                        bg="rgba(255,255,255,0.2)"
+                        px="$4"
+                        py="$2"
+                        borderRadius="$full"
+                      >
+                        <Text
+                          color="#FFFFFF"
+                          fontSize={12}
+                          fontWeight="500"
+                          lineHeight={22}
+                        >
+                          {tag}
+                        </Text>
+                      </Box>
+                    ))}
+                    {profile.interests && profile.interests.length > 2 && (
+                      <Box
+                        bg="rgba(255,255,255,0.2)"
+                        px="$4"
+                        py="$2"
+                        borderRadius="$full"
+                      >
+                        <Text
+                          color="#FFFFFF"
+                          fontSize={12}
+                          fontWeight="500"
+                          lineHeight={22}
+                        >
+                          +{profile.interests.length - 2}
+                        </Text>
+                      </Box>
+                    )}
+                  </HStack>
+                </ScrollView>
+
+                {/* Like button in profile detail hero section (Matches screenshot 2) */}
+                <Pressable
+                  w={56}
+                  h={56}
+                  bg={PRIMARY_COLOR}
+                  borderRadius="$full"
+                  justifyContent="center"
+                  alignItems="center"
+                  ml="$2"
+                  onPress={() => {
+                    toggleLike(profile.id, isLiked);
+                    handleInteraction(profile.id, !isLiked ? "like" : "dislike");
+                  }}
+                >
+                  <Ionicons
+                    name={isLiked ? "heart" : "heart-outline"}
+                    size={24}
+                    color="#FFFFFF"
+                  />
+                </Pressable>
               </HStack>
             </VStack>
           </Box>

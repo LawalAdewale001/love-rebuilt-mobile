@@ -121,14 +121,21 @@ export default function SearchScreen() {
                     </Box>
                     <VStack space="xs">
                       <HStack alignItems="center" space="xs">
+
+
+
                         <Text
-                          size="lg"
+                          size="md"
                           fontWeight="$bold"
                           color="$textLight900"
                         >
-                          {user.fullName}
+                          {user.fullName}{user.age ? `, ${user.age}` : ""}
                         </Text>
-                        {user.isVerified && <Text>✅</Text>}
+                        <Image
+                          source={require("@/assets/images/icon-verified.png")}
+                          style={{ width: 16, height: 16 }}
+                          contentFit="contain"
+                        />
                       </HStack>
                       <HStack space="sm">
                         {/* Display first 2 interests as tags if available */}
@@ -142,13 +149,29 @@ export default function SearchScreen() {
                           >
                             <Text
                               size="xs"
-                              color="$textLight600"
+                              color="$textLight900"
                               fontWeight="$medium"
                             >
                               {tag}
                             </Text>
                           </Box>
                         ))}
+                        {user.interests?.length > 2 && (
+                          <Box
+                            bg="#F7F5F4"
+                            px="$3"
+                            py="$1"
+                            borderRadius="$full"
+                          >
+                            <Text
+                              size="xs"
+                              color="$textLight900"
+                              fontWeight="$medium"
+                            >
+                              +{user.interests.length - 2}
+                            </Text>
+                          </Box>
+                        )}
                       </HStack>
                     </VStack>
                   </HStack>

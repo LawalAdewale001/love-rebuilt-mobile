@@ -4,6 +4,7 @@ import {
   useDiscoveryGeneralQuery,
   useProfileQuery,
   useRecordInteractionMutation,
+  useLikedProfiles,
 } from "@/lib/queries";
 import {
   Box,
@@ -15,6 +16,7 @@ import {
   VStack,
 } from "@gluestack-ui/themed";
 import { Image } from "expo-image";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Dimensions } from "react-native";
@@ -27,6 +29,7 @@ export default function DiscoverScreen() {
   const router = useRouter();
 
   const [activeTab, setActiveTab] = useState<"forYou" | "nearby">("forYou");
+  const { likedProfiles, toggleLike } = useLikedProfiles();
 
   const { data: currentUser } = useProfileQuery();
   const {
@@ -47,19 +50,19 @@ export default function DiscoverScreen() {
   /* app/(tabs)/index.tsx */
 
   // Handles both Likes and Passes
-  const handleInteraction = (targetUserId: string, type: "like" | "pass") => {
+  const handleInteraction = (targetUserId: string, type: "like" | "pass" | "dislike") => {
     // Map 'pass' to 'dislike' for the backend
-    const apiType = type === "pass" ? "dislike" : "like";
+    const apiType = type === "pass" ? "dislike" : type;
 
     interactionMutation.mutate(
       {
-        receiverId: targetUserId, // Send as receiverId to fix the 400 error
+        receiverId: targetUserId,
         type: apiType,
       },
       {
         onSuccess: () => {
           // Use the original 'type' for the toast
-          showToast("success", type === "like" ? "Liked!" : "Passed", "");
+          showToast("success", type === "like" ? "Liked!" : "Unliked", "");
         },
         onError: (err: any) => {
           showToast(
@@ -243,7 +246,7 @@ export default function DiscoverScreen() {
                         style={{ width: 16, height: 16 }}
                         contentFit="contain"
                       />
-                      <Text fontWeight="$semibold" size="sm" color="#1A1A1A">
+                      <Text fontWeight="500" fontSize={12} color="#1D1D1D">
                         {profile.relationshipGoal || "Open to Dating"}
                       </Text>
                     </HStack>
@@ -278,13 +281,13 @@ export default function DiscoverScreen() {
                         style={{ width: 16, height: 16 }}
                         contentFit="contain"
                       />
-                      <Text color="#FFFFFF" size="sm" fontWeight="$medium">
+                      <Text color="#FFFFFF" fontSize={12} fontWeight="400" lineHeight={22}>
                         {profile.location || "Location Unknown"}
                       </Text>
                     </HStack>
 
                     <HStack space="xs" alignItems="center" mb="$3">
-                      <Text color="#FFFFFF" size="3xl" fontWeight="$bold">
+                      <Text color="#FFFFFF" fontSize={17} fontWeight="600" lineHeight={22}>
                         {profile.fullName?.split(" ")[0]}, {profile.age}
                       </Text>
                       {profile.isVerified && (
@@ -301,25 +304,57 @@ export default function DiscoverScreen() {
                       alignItems="center"
                       justifyContent="space-between"
                     >
-                      <HStack space="sm" flexWrap="wrap" flex={1}>
-                        {getTags(profile).map((tag: any, idx: number) => (
-                          <Box
-                            key={idx}
-                            bg="rgba(255,255,255,0.2)"
-                            px="$3"
-                            py="$1"
-                            borderRadius="$full"
-                          >
-                            <Text
-                              color="#FFFFFF"
-                              size="sm"
-                              fontWeight="$medium"
-                            >
-                              {tag}
-                            </Text>
-                          </Box>
-                        ))}
-                      </HStack>
+                      <Box flex={1}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                          <HStack space="sm" flexWrap="nowrap" alignItems="center">
+                            {(() => {
+                              const displayTags = profile.interests?.length 
+                                ? profile.interests 
+                                : [profile.religion, profile.tribe, profile.childrenStatus].filter(Boolean);
+
+                              return (
+                                <>
+                                  {displayTags.slice(0, 2).map((tag: string, idx: number) => (
+                                    <Box
+                                      key={idx}
+                                      bg="rgba(255,255,255,0.2)"
+                                      px="$3"
+                                      py="$1"
+                                      borderRadius="$full"
+                                    >
+                                      <Text
+                                        color="#FFFFFF"
+                                        fontSize={12}
+                                        fontWeight="500"
+                                        lineHeight={22}
+                                      >
+                                        {tag}
+                                      </Text>
+                                    </Box>
+                                  ))}
+                                  {displayTags.length > 2 && (
+                                    <Box
+                                      bg="rgba(255,255,255,0.2)"
+                                      px="$3"
+                                      py="$1"
+                                      borderRadius="$full"
+                                    >
+                                      <Text
+                                        color="#FFFFFF"
+                                        fontSize={12}
+                                        fontWeight="500"
+                                        lineHeight={22}
+                                      >
+                                        +{displayTags.length - 2}
+                                      </Text>
+                                    </Box>
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </HStack>
+                        </ScrollView>
+                      </Box>
 
                       <Pressable
                         w={48}
@@ -328,12 +363,16 @@ export default function DiscoverScreen() {
                         borderRadius="$full"
                         justifyContent="center"
                         alignItems="center"
-                        onPress={() => handleInteraction(profile.id, "like")}
+                        onPress={() => {
+                          const isLiked = !!likedProfiles[profile.id];
+                          toggleLike(profile.id, isLiked);
+                          handleInteraction(profile.id, isLiked ? "dislike" : "like");
+                        }}
                       >
-                        <Image
-                          source={require("@/assets/images/icon-heart.png")}
-                          style={{ width: 24, height: 24 }}
-                          contentFit="contain"
+                        <Ionicons
+                          name={likedProfiles[profile.id] ? "heart" : "heart-outline"}
+                          size={24}
+                          color="#FFFFFF"
                         />
                       </Pressable>
                     </HStack>

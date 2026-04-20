@@ -125,14 +125,21 @@ export function useUserProfileByIdQuery(id: string) {
   });
 }
 
+/* lib/queries/index.ts */
+
 export function useUserSearchQuery(query: string) {
   return useQuery({
     queryKey: [...queryKeys.all, "userSearch", query],
-    queryFn: () =>
-      apiClient.get<UserProfile[]>("/api/user/search", {
-        params: { name: query },
-      }),
-    enabled: query.trim().length > 0, // Only fetch if there's a search term
+    queryFn: async () => {
+      // FIX: The backend explicitly expects the parameter key to be 'q' as per swagger docs
+      const response = await apiClient.get<any>("/api/user/search", {
+        params: { q: query },
+      });
+
+      // Keep the safe extraction: your interceptor returns { result, pagination }
+      return response?.data?.result || response?.result || [];
+    },
+    enabled: query.trim().length > 0,
   });
 }
 
@@ -538,7 +545,7 @@ export function useDiscoveryGeneralQuery(
     queryKey: ["discoveryGeneral", filter],
     queryFn: async () => {
       const response = await apiClient.get<any>("/api/discovery/general", {
-        params: { page: 1, limit: 20, filter }, // Added pagination params to match your swagger
+        params: { page: "1", limit: "20", filter }, // Added pagination params to match your swagger
       });
       // Extract the array directly so the UI doesn't have to guess
       return response?.data?.result || response?.result || [];
@@ -551,7 +558,7 @@ export function useDiscoveryMatchesQuery() {
     queryKey: ["discoveryMatches"],
     queryFn: async () => {
       const response = await apiClient.get<any>("/api/discovery/matches", {
-        params: { page: 1, limit: 20 },
+        params: { page: "1", limit: "20" },
       });
       // Extract the array directly
       return response?.data?.result || response?.result || [];
@@ -580,6 +587,26 @@ export function useDiscoveryPreferencesQuery() {
     queryKey: ["discoveryPreferences"],
     queryFn: () => apiClient.get("/api/discovery/preferences"),
   });
+}
+
+// --- Shared Optimistic Like State ---
+export function useLikedProfiles() {
+  const queryClient = useQueryClient();
+  const { data: likedProfiles = {} } = useQuery<Record<string, boolean>>({
+    queryKey: ["optimisticLikedProfiles"],
+    queryFn: () => ({}), // Dummy function required by React Query v5
+    initialData: {},
+    staleTime: Infinity, // keep in cache
+  });
+
+  const toggleLike = (id: string, currentStatus: boolean) => {
+    queryClient.setQueryData(["optimisticLikedProfiles"], (old: any = {}) => ({
+      ...old,
+      [id]: !currentStatus,
+    }));
+  };
+
+  return { likedProfiles, toggleLike };
 }
 
 export function useUpdateDiscoveryPreferencesMutation() {
@@ -666,7 +693,7 @@ export function useMiniCoursesQuery() {
       const response = await apiClient.get<any>(
         "/api/mini-courses/categories",
         {
-          params: { page: 1, limit: 10 },
+          params: { page: "1", limit: "10" },
         },
       );
 
