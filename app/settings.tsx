@@ -473,7 +473,7 @@ export default function SettingsScreen() {
                     <Text size="xs" color="$textLight500">
                       Day
                     </Text>
-                    <Input variant="unstyled" h={24} p={0}>
+                    <Input h={24} p={0} borderWidth={0}>
                       <InputField
                         p={0}
                         value={day}
@@ -498,7 +498,7 @@ export default function SettingsScreen() {
                     <Text size="xs" color="$textLight500">
                       Month
                     </Text>
-                    <Input variant="unstyled" h={24} p={0}>
+                    <Input h={24} p={0} borderWidth={0}>
                       <InputField
                         p={0}
                         value={month}
@@ -524,7 +524,7 @@ export default function SettingsScreen() {
                     <Text size="xs" color="$textLight500">
                       Year
                     </Text>
-                    <Input variant="unstyled" h={24} p={0}>
+                    <Input h={24} p={0} borderWidth={0}>
                       <InputField
                         p={0}
                         value={year}
@@ -649,7 +649,7 @@ export default function SettingsScreen() {
                       <Text size="xs" color="$textLight500">
                         From
                       </Text>
-                      <Input variant="unstyled" h={24} p={0}>
+                      <Input h={24} p={0} borderWidth={0}>
                         <InputField
                           p={0}
                           value={minAge}
@@ -673,7 +673,7 @@ export default function SettingsScreen() {
                       <Text size="xs" color="$textLight500">
                         To
                       </Text>
-                      <Input variant="unstyled" h={24} p={0}>
+                      <Input h={24} p={0} borderWidth={0}>
                         <InputField
                           p={0}
                           value={maxAge}
@@ -707,7 +707,7 @@ export default function SettingsScreen() {
                     <Text size="xs" color="$textLight500">
                       Distance
                     </Text>
-                    <Input variant="unstyled" h={24} p={0}>
+                    <Input h={24} p={0} borderWidth={0}>
                       <InputField
                         p={0}
                         value={maxDistance}
@@ -786,7 +786,7 @@ export default function SettingsScreen() {
                     <Text size="xs" color="$textLight500">
                       Children Preference
                     </Text>
-                    <Input variant="unstyled" h={24} p={0}>
+                    <Input h={24} p={0} borderWidth={0}>
                       <InputField
                         p={0}
                         value={childrenPref}

@@ -403,7 +403,7 @@ export default function ProfileScreen() {
             </HStack>
           </VStack>
 
-          <HStack justifyContent="space-between" space="md">
+          {/* <HStack justifyContent="space-between" space="md">
             <VStack
               flex={1}
               bg="#F7F5F4"
@@ -446,7 +446,7 @@ export default function ProfileScreen() {
                 Match Rate
               </Text>
             </VStack>
-          </HStack>
+          </HStack> */}
 
           {/* ActionSheet Triggers */}
           <ProfileSection
@@ -674,7 +674,7 @@ export default function ProfileScreen() {
                   <Text size="xs" color="$textLight500">
                     Identity
                   </Text>
-                  <Input variant="unstyled" h={24} p={0}>
+                  <Input h={24} p={0} borderWidth={0}>
                     <InputField
                       p={0}
                       value={editIdentity}
@@ -697,7 +697,7 @@ export default function ProfileScreen() {
                   <Text size="xs" color="$textLight500">
                     Religion
                   </Text>
-                  <Input variant="unstyled" h={24} p={0}>
+                  <Input h={24} p={0} borderWidth={0}>
                     <InputField
                       p={0}
                       value={editReligion}
@@ -720,7 +720,7 @@ export default function ProfileScreen() {
                   <Text size="xs" color="$textLight500">
                     Tribe
                   </Text>
-                  <Input variant="unstyled" h={24} p={0}>
+                  <Input h={24} p={0} borderWidth={0}>
                     <InputField
                       p={0}
                       value={editTribe}
@@ -851,7 +851,7 @@ export default function ProfileScreen() {
                       <Text size="xs" color="$textLight500">
                         How many children?
                       </Text>
-                      <Input variant="unstyled" h={24} p={0}>
+                      <Input h={24} p={0} borderWidth={0}>
                         <InputField
                           p={0}
                           value={editChildrenCount}
@@ -875,7 +875,7 @@ export default function ProfileScreen() {
                       <Text size="xs" color="$textLight500">
                         Where do they live?
                       </Text>
-                      <Input variant="unstyled" h={24} p={0}>
+                      <Input h={24} p={0} borderWidth={0}>
                         <InputField
                           p={0}
                           value={editChildrenStay}
