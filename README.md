@@ -53,6 +53,16 @@ eas build --platform ios --profile development
 ```
 
 
+### 🐛 Server not running
+````bash
+1. ipconfig
+2. setx /M REACT_NATIVE_PACKAGER_HOSTNAME 10.84.164.220 [On powershell]
+3. Reopen the terminal
+4. yarn run dev
+5. Scan QR code
+```
+
+
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
 ## Get a fresh project

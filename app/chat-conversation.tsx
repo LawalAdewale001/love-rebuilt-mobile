@@ -33,7 +33,7 @@ import { ChatModals } from "@/components/chat/ChatModals";
 import { useChatSocket } from "@/hooks/use-chat-socket";
 import { useS3Upload } from "@/hooks/use-s3-upload";
 import { getAuthUser } from "@/lib/auth-store";
-import { queryKeys, useMessagesQuery, type ChatMessage as ApiChatMessage, type ChatConversation, type ChatMember, useBlockMutation, useReportMutation, useConversationQuery, useUnblockMutation, useChatListQuery, useJoinGroupMutation, useLeaveGroupMutation, useCreateMeetupMutation, useChatProgressMutation } from "@/lib/queries";
+import { queryKeys, useMessagesQuery, type ChatMessage as ApiChatMessage, type ChatConversation, type ChatMember, useBlockMutation, useReportMutation, useConversationQuery, useUnblockMutation, useChatListQuery, useJoinGroupMutation, useLeaveGroupMutation, useCreateMeetupMutation, useChatProgressMutation, useCreateDirectChatMutation } from "@/lib/queries";
 import { emitDeleteMessage, emitEditMessage, emitSendMessage, emitTyping, emitMarkAsRead } from "@/lib/socket";
 import { setActiveConversation } from "@/lib/active-conversation";
 
@@ -197,11 +197,28 @@ export default function ChatConversationScreen() {
 
   const isGroup = isGroupParam === "1";
   const currentUserId = getAuthUser()?.id ?? "";
-  const compatKey = `compat_dismissed_${chatId}`;
-  const joinedKey = `group_joined_${chatId}`;
+
+  // When arriving from profile/discovery without a conversation ID, create/find one
+  const createDirectChat = useCreateDirectChatMutation();
+  const [resolvedChatId, setResolvedChatId] = useState(chatId !== "0" ? chatId : "");
+
+  useEffect(() => {
+    if (chatId !== "0" || !recipientIdParam) return;
+    createDirectChat.mutate(recipientIdParam, {
+      onSuccess: (conv: any) => {
+        const id = conv?.id ?? conv?.data?.id;
+        if (id) setResolvedChatId(id);
+      },
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const effectiveChatId = resolvedChatId || chatId;
+  const compatKey = `compat_dismissed_${effectiveChatId}`;
+  const joinedKey = `group_joined_${effectiveChatId}`;
 
   // ── Conversation data (blocked status etc) ──────────────────────────────────
-  const { data: conversationData } = useConversationQuery(chatId);
+  const { data: conversationData } = useConversationQuery(effectiveChatId);
   const { data: chatListData } = useChatListQuery();
   
   const conversation = useMemo<ChatConversation | null>(() => {
@@ -209,28 +226,29 @@ export default function ChatConversationScreen() {
     // Fallback search in chat list cache
     if (chatListData?.pages) {
       for (const page of chatListData.pages) {
-        const found = page.result.find((c: ChatConversation) => c.id === chatId);
+        const found = page.result.find((c: ChatConversation) => c.id === effectiveChatId);
         if (found) return found;
       }
     }
     return null;
-  }, [conversationData, chatListData, chatId]);
+  }, [conversationData, chatListData, effectiveChatId]);
 
   const isBlocked = conversation?.isBlocked;
   const blockedMe = conversation?.blockedMe;
-  const isMember = isGroup ? (conversation?.isMember ?? false) : true; 
+  const isMember = isGroup ? (conversation?.isMember ?? false) : true;
 
   // ── Message state ──────────────────────────────────────────────────────────
-  const { data: messagesData, fetchNextPage, hasNextPage, isFetchingNextPage, refetch, isLoading: isMessagesLoading } = useMessagesQuery(chatId);
+  const { data: messagesData, fetchNextPage, hasNextPage, isFetchingNextPage, refetch, isLoading: isMessagesLoading } = useMessagesQuery(effectiveChatId);
 
   useFocusEffect(
     useCallback(() => {
-      setActiveConversation(chatId);
+      if (!effectiveChatId) return;
+      setActiveConversation(effectiveChatId);
       refetch();
       // Mark all messages as read as soon as the user enters the conversation
-      emitMarkAsRead(chatId);
+      emitMarkAsRead(effectiveChatId);
       return () => setActiveConversation(null); // Clear when leaving the screen
-    }, [refetch, chatId])
+    }, [refetch, effectiveChatId])
   );
 
   const apiMessages: ChatMessage[] = useMemo(() => {
@@ -304,7 +322,7 @@ export default function ChatConversationScreen() {
   }, []);
 
   // ── Socket ─────────────────────────────────────────────────────────────────
-  const { typingUser, isRecipientOnline } = useChatSocket(chatId);
+  const { typingUser, isRecipientOnline } = useChatSocket(effectiveChatId);
   const isOnline = isRecipientOnline ?? isOnlineParam === "1";
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -540,7 +558,7 @@ export default function ChatConversationScreen() {
     if (result) {
       const tempId = addOptimisticMessage({ type: MessageType.AUDIO, mediaUrl: result.fileUrl });
       emitSendMessage(
-        { conversationId: chatId, type: MessageType.AUDIO, mediaUrl: result.fileUrl },
+        { conversationId: effectiveChatId, type: MessageType.AUDIO, mediaUrl: result.fileUrl },
         (res) => {
           const realId = res?.id || res?.data?.id || res?.result?.id;
           if (realId) updateMessageId(tempId, realId);
@@ -559,7 +577,7 @@ export default function ChatConversationScreen() {
       if (res) {
         const tempId = addOptimisticMessage({ type: MessageType.IMAGE, mediaUrl: res.fileUrl });
         emitSendMessage(
-          { conversationId: chatId, type: MessageType.IMAGE, mediaUrl: res.fileUrl },
+          { conversationId: effectiveChatId, type: MessageType.IMAGE, mediaUrl: res.fileUrl },
           (resSync) => {
             const realId = resSync?.id || resSync?.data?.id || resSync?.result?.id;
             if (realId) updateMessageId(tempId, realId);
@@ -577,7 +595,7 @@ export default function ChatConversationScreen() {
       if (res) {
         const tempId = addOptimisticMessage({ type: MessageType.FILE, mediaUrl: res.fileUrl });
         emitSendMessage(
-          { conversationId: chatId, type: MessageType.FILE, mediaUrl: res.fileUrl },
+          { conversationId: effectiveChatId, type: MessageType.FILE, mediaUrl: res.fileUrl },
           (resSync) => {
             const realId = resSync?.id || resSync?.data?.id || resSync?.result?.id;
             if (realId) updateMessageId(tempId, realId);
@@ -611,7 +629,7 @@ export default function ChatConversationScreen() {
   const handleProgressSubmit = async (reason: string) => {
     try {
       await progressMutation.mutateAsync({
-        conversationId: chatId,
+        conversationId: effectiveChatId,
         reason,
         showChatProgressBanner: false
       });
@@ -624,7 +642,7 @@ export default function ChatConversationScreen() {
   const handleJoinGroup = async () => {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      await joinGroupMutation.mutateAsync(chatId);
+      await joinGroupMutation.mutateAsync(effectiveChatId);
       closeSheet();
     } catch (err) {
       console.error("Failed to join group:", err);
@@ -639,7 +657,7 @@ export default function ChatConversationScreen() {
       const formattedTime = data.time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }); // HH:mm
       
       await meetupMutation.mutateAsync({
-        conversationId: chatId,
+        conversationId: effectiveChatId,
         title: data.title,
         location: data.location,
         date: formattedDate,
@@ -660,7 +678,7 @@ export default function ChatConversationScreen() {
   const handleLeaveGroup = async () => {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      await leaveGroupMutation.mutateAsync(chatId);
+      await leaveGroupMutation.mutateAsync(effectiveChatId);
       closeSheet();
       router.back();
     } catch (err) {
@@ -697,7 +715,7 @@ export default function ChatConversationScreen() {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       await reportMutation.mutateAsync({
-        targetId: isGroup ? chatId : (recipientIdParam || ""),
+        targetId: isGroup ? effectiveChatId : (recipientIdParam || ""),
         targetType: isGroup ? "group" : "user",
         reason,
       });
@@ -731,7 +749,7 @@ export default function ChatConversationScreen() {
     // Scroll to latest message immediately (inverted list: offset 0 = bottom)
     flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
     emitSendMessage(
-      { conversationId: chatId, content: text, replyToId: replyingTo?.id, type: MessageType.TEXT },
+      { conversationId: effectiveChatId, content: text, replyToId: replyingTo?.id, type: MessageType.TEXT },
       (res) => {
         const realId = res?.id || res?.data?.id || res?.result?.id;
         if (realId) updateMessageId(tempId, realId);
@@ -740,17 +758,17 @@ export default function ChatConversationScreen() {
       }
     );
     setMessage(""); setReplyingTo(null);
-    emitTyping(chatId, false);
+    emitTyping(effectiveChatId, false);
   };
 
   const handleTextChange = (text: string) => {
     setMessage(text);
     if (text.trim().length > 0) {
-      emitTyping(chatId, true);
+      emitTyping(effectiveChatId, true);
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
-      typingTimerRef.current = setTimeout(() => emitTyping(chatId, false), 2000);
+      typingTimerRef.current = setTimeout(() => emitTyping(effectiveChatId, false), 2000);
     } else {
-      emitTyping(chatId, false);
+      emitTyping(effectiveChatId, false);
     }
   };
 
@@ -778,7 +796,7 @@ export default function ChatConversationScreen() {
         return {
           ...old,
           chats: old.chats.map((c: ChatConversation) => (
-            c.id === chatId && c.lastMessage?.id === mid
+            c.id === effectiveChatId && c.lastMessage?.id === mid
               ? { ...c, lastMessage: { ...c.lastMessage, isDeleted: true } }
               : c
           ))
@@ -813,7 +831,7 @@ export default function ChatConversationScreen() {
         return {
           ...old,
           chats: old.chats.map((c: ChatConversation) => (
-            c.id === chatId && c.lastMessage?.id === mid
+            c.id === effectiveChatId && c.lastMessage?.id === mid
               ? { ...c, lastMessage: { ...c.lastMessage, isDeleted: true } }
               : c
           ))
@@ -871,7 +889,7 @@ export default function ChatConversationScreen() {
             onUnblock={handleUnblock}
             isUnblocking={unblockMutation.isPending}
             isMember={isMember}
-            chatId={chatId}
+            chatId={effectiveChatId}
           />
 
           {/* Full-screen tap-away to close options dropdown */}
