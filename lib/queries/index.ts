@@ -558,6 +558,7 @@ export function useDiscoveryGeneralQuery(
       const response = await apiClient.get<any>("/api/discovery/general", {
         params: { page: "1", limit: "20", filter }, // Added pagination params to match your swagger
       });
+      console.log("[Discovery] raw response:", JSON.stringify(response, null, 2));
       // Extract the array directly so the UI doesn't have to guess
       return response?.data?.result || response?.result || [];
     },
