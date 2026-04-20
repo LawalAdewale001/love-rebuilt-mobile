@@ -12,7 +12,7 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Box, HStack, Pressable, Text, VStack } from "@gluestack-ui/themed";
 import { Image } from "expo-image";
 import { useRef } from "react";
-import { ActivityIndicator, Animated, Easing } from "react-native";
+import { ActivityIndicator, Animated, Easing, Modal, TouchableOpacity, StyleSheet, Dimensions } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useInteractionMutation } from "@/lib/queries";
@@ -82,6 +82,7 @@ export function ChatHeader({
   const router = useRouter();
   const likeScale = useRef(new Animated.Value(1)).current;
   const interactionMutation = useInteractionMutation();
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
 
   // ── Menu animation ──────────────────────────────────────────────────────────
   const menuAnim = useRef(new Animated.Value(0)).current;
@@ -163,17 +164,19 @@ export function ChatHeader({
             <MaterialIcons name="arrow-back" size={20} color={isUploading ? "#999999" : "#1A1A1A"} />
           </Pressable>
 
-          {avatar ? (
-            <Box w={36} h={36} borderRadius={18} overflow="hidden">
-              <Image source={{ uri: avatar }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
-            </Box>
-          ) : (
-            <Box w={36} h={36} borderRadius={18} bg="#F0C4C8" justifyContent="center" alignItems="center">
-              <MaterialIcons name="person" size={20} color={PRIMARY_COLOR} />
-            </Box>
-          )}
+          <Pressable onPress={() => avatar && setShowAvatarModal(true)} disabled={!avatar}>
+            {avatar ? (
+              <Box w={36} h={36} borderRadius={18} overflow="hidden">
+                <Image source={{ uri: avatar }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+              </Box>
+            ) : (
+              <Box w={36} h={36} borderRadius={18} bg="#F0C4C8" justifyContent="center" alignItems="center">
+                <MaterialIcons name="person" size={20} color={PRIMARY_COLOR} />
+              </Box>
+            )}
+          </Pressable>
 
-          <VStack flex={1} mr="$2">
+          <Pressable flex={1} mr="$2" onPress={() => avatar && setShowAvatarModal(true)} disabled={!avatar}>
             <Text fontSize={17} fontWeight="$600" color="#1A1A1A" numberOfLines={1} ellipsizeMode="tail">
               {name}
             </Text>
@@ -185,7 +188,7 @@ export function ChatHeader({
                 </Text>
               </HStack>
             )}
-          </VStack>
+          </Pressable>
         </HStack>
 
         <HStack alignItems="center" space="md">
@@ -321,6 +324,71 @@ export function ChatHeader({
         </Box>
         </Animated.View>
       )}
+
+      {/* Avatar lightbox */}
+      <Modal visible={showAvatarModal} transparent animationType="fade" onRequestClose={() => setShowAvatarModal(false)}>
+        <TouchableOpacity style={styles.lightboxBackdrop} activeOpacity={1} onPress={() => setShowAvatarModal(false)}>
+          {/* Close button */}
+          <TouchableOpacity
+            style={styles.closeBtn}
+            onPress={() => setShowAvatarModal(false)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <MaterialIcons name="close" size={22} color="#FFFFFF" />
+          </TouchableOpacity>
+
+          <Animated.View style={styles.lightboxContent}>
+            <Image
+              source={{ uri: avatar! }}
+              style={styles.lightboxImage}
+              contentFit="cover"
+            />
+            <Box mt="$3" alignItems="center">
+              <Text fontSize={18} fontWeight="$700" color="#FFFFFF">{name}</Text>
+              {!isGroup && (
+                <HStack alignItems="center" space="xs" mt="$1">
+                  <Box w={8} h={8} borderRadius={4} bg={isOnline ? "#5A2A54" : "#BDBDBD"} />
+                  <Text fontSize={13} color={isOnline ? "#C084C8" : "#9CA3AF"}>
+                    {isOnline ? "Online" : formatLastSeen(lastSeen)}
+                  </Text>
+                </HStack>
+              )}
+            </Box>
+          </Animated.View>
+        </TouchableOpacity>
+      </Modal>
     </>
   );
 }
+
+const { width: SCREEN_W } = Dimensions.get("window");
+
+const styles = StyleSheet.create({
+  lightboxBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.88)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  closeBtn: {
+    position: "absolute",
+    top: 52,
+    right: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  lightboxContent: {
+    alignItems: "center",
+  },
+  lightboxImage: {
+    width: SCREEN_W * 0.78,
+    height: SCREEN_W * 0.78,
+    borderRadius: SCREEN_W * 0.39,
+    borderWidth: 3,
+    borderColor: "rgba(255,255,255,0.15)",
+  },
+});

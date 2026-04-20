@@ -335,7 +335,7 @@ export function useConversationQuery(conversationId: string) {
         throw err;
       }
     },
-    enabled: !!conversationId,
+    enabled: !!conversationId && conversationId !== "0",
   });
 }
 
@@ -353,6 +353,17 @@ export function useBlockMutation() {
   return useMutation({
     mutationFn: (blockedId: string) =>
       apiClient.post("/api/chat/block", { blockedId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
+    },
+  });
+}
+
+export function useCreateDirectChatMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (receiverId: string) =>
+      apiClient.post<ChatConversation>("/api/chat/direct", { receiverId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
     },
