@@ -247,7 +247,10 @@ export function ChatInputBar({
                 key={question}
                 borderWidth={1} borderColor="#E0E0E0" borderRadius={20}
                 px="$3" py="$2"
-                onPress={() => onChangeText(question)}
+                onPress={() => {
+                  currentTextRef.current = question;
+                  onChangeText(question);
+                }}
               >
                 <Text fontSize={12} color="#1A1A1A">{question}</Text>
               </Pressable>

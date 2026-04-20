@@ -45,11 +45,18 @@ To ensure the app correctly connects to the local development server when using 
      `[IP_ADDRESS]:[PORT]`
       11.222.89.56:8081
 
-### ✅ Bundling .apk and .abb
+### 📦 Bundling for Development: Dev Client
 ````bash
 eas build --platform android --profile development
 eas build --platform all --profile development
 eas build --platform ios --profile development
+```
+
+
+###  📦 Bundling .apk for Preview
+````bash
+eas build --platform android --profile preview
+eas build --platform ios --profile preview
 ```
 
 
