@@ -14,6 +14,7 @@ import {
   VStack,
 } from "@gluestack-ui/themed";
 import { Image } from "expo-image";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -94,50 +95,37 @@ export default function NotificationsScreen() {
                       w={48}
                       h={48}
                       borderRadius="$full"
-                      bg={item.isRead ? "#F7F5F4" : "#FFF0F2"}
+                      bg={item.type === "match" ? "#FFDFB3" : "#A8A3FF"}
                       justifyContent="center"
                       alignItems="center"
                       overflow="hidden"
                     >
-                      {item.avatar ? (
-                        <Image
-                          source={{ uri: item.avatar }}
-                          style={{ width: "100%", height: "100%" }}
-                          contentFit="cover"
-                        />
-                      ) : (
-                        <Image
-                          source={require("@/assets/images/icon-bell.png")}
-                          style={{ width: 24, height: 24 }}
-                          contentFit="contain"
-                          tintColor={item.isRead ? "#666" : PRIMARY_COLOR}
-                        />
-                      )}
+                      <Ionicons
+                        name="heart"
+                        size={24}
+                        color={item.type === "match" ? "#FFA500" : "#4E3EFC"}
+                      />
                     </Box>
 
                     {/* Content */}
-                    <VStack flex={1} space="xs">
-                      <HStack
-                        justifyContent="space-between"
-                        alignItems="center"
+                    <VStack flex={1} space="xs" pr="$2">
+                      <Text
+                        size="md"
+                        fontWeight="$bold"
+                        color="$textLight900"
                       >
-                        <Text
-                          size="md"
-                          fontWeight="$bold"
-                          color="$textLight900"
-                        >
-                          {item.title || "Alert"}
-                        </Text>
-                        <Text size="xs" color="$textLight500">
-                          {/* Assuming backend sends an ISO string */}
-                          {item.createdAt
-                            ? new Date(item.createdAt).toLocaleDateString()
-                            : "Now"}
-                        </Text>
-                      </HStack>
-                      <Text size="sm" color="$textLight600" numberOfLines={2}>
-                        {item.message}
+                        {item.title || "Alert"}
                       </Text>
+                      <Text size="sm" color="$textLight500" lineHeight={20}>
+                        {item.body}
+                      </Text>
+                      <Box mt="$2">
+                        <Box alignSelf="flex-start" bg="#FDECEE" py="$2" px="$4" borderRadius="$full">
+                          <Text color={PRIMARY_COLOR} fontWeight="500" size="sm">
+                            {item.type === "match" ? "View Profile" : "View Matches"}
+                          </Text>
+                        </Box>
+                      </Box>
                     </VStack>
 
                     {/* Unread dot */}

@@ -664,7 +664,18 @@ export function useCurrentLocationQuery(enabled: boolean) {
 export function useNotificationListQuery() {
   return useQuery({
     queryKey: ["notifications"],
-    queryFn: () => apiClient.get<any[]>("/api/notification/list"),
+    queryFn: async () => {
+      const response = await apiClient.get<any>("/api/notification/list", {
+        params: { page: "1", limit: "20" },
+      });
+      // apiClient unwraps data.result when it's the only key.
+      return (
+        response?.notifications ||
+        response?.result?.notifications ||
+        response?.data?.result?.notifications ||
+        []
+      );
+    },
   });
 }
 
