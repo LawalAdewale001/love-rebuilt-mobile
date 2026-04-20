@@ -20,7 +20,6 @@ import { useState } from "react";
 import { Dimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const DEFAULT_AVATAR = require("@/assets/images/home-avatar.png");
 const { width } = Dimensions.get("window");
 
 export default function DiscoverScreen() {
@@ -38,9 +37,7 @@ export default function DiscoverScreen() {
   const interactionMutation = useRecordInteractionMutation();
 
   const firstName = currentUser?.fullName?.split(" ")[0] ?? "there";
-  const avatarSource = currentUser?.avatar
-    ? { uri: currentUser.avatar }
-    : DEFAULT_AVATAR;
+  const avatarSource = currentUser?.avatar ? { uri: currentUser.avatar } : null;
 
   /* app/(tabs)/index.tsx */
 
@@ -88,11 +85,26 @@ export default function DiscoverScreen() {
         <HStack justifyContent="space-between" alignItems="center" px="$6">
           <HStack space="md" alignItems="center">
             <Box w={48} h={48} borderRadius="$full" overflow="hidden">
-              <Image
-                source={avatarSource}
-                style={{ width: "100%", height: "100%" }}
-                contentFit="cover"
-              />
+              {avatarSource ? (
+                <Image
+                  source={avatarSource}
+                  style={{ width: "100%", height: "100%" }}
+                  contentFit="cover"
+                />
+              ) : (
+                <Box
+                  w={48}
+                  h={48}
+                  borderRadius="$full"
+                  bg="$rose100"
+                  justifyContent="center"
+                  alignItems="center"
+                >
+                  <Text fontWeight="$bold" color="$rose500" fontSize={18}>
+                    {firstName?.charAt(0).toUpperCase() ?? "?"}
+                  </Text>
+                </Box>
+              )}
             </Box>
             <VStack>
               <Text size="sm" color="$textLight500">
