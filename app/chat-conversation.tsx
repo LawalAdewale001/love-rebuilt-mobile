@@ -277,6 +277,7 @@ export default function ChatConversationScreen() {
         deleted: m.isDeleted,
         type: mappedType,
         mediaUrl: m.mediaUrl || undefined,
+        durationMs: m.duration ? m.duration * 1000 : undefined,
         edited: m.isEdited,
         meetup: m.meetup ? {
           title: m.meetup.title,

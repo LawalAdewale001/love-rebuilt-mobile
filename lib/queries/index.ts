@@ -253,6 +253,7 @@ export type ChatMessage = {
   type: string;
   content: string;
   mediaUrl: string | null;
+  duration: number | null;
   transcription: string | null;
   replyToId: string | null;
   isRead: boolean;

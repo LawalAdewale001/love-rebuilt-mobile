@@ -2,6 +2,7 @@ import { Audio, AVPlaybackStatus } from "expo-av";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Box, HStack, Pressable, Text, VStack } from "@gluestack-ui/themed";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator } from "react-native";
 import { PRIMARY_COLOR } from "@/constants/theme";
 
 interface VoiceNotePlayerProps {
@@ -13,105 +14,70 @@ interface VoiceNotePlayerProps {
 function VoiceNotePlayerComponent({ uri, sent, durationMs }: VoiceNotePlayerProps) {
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(durationMs ?? 0);
-  const [isLoading, setIsLoading] = useState(false);
   const soundRef = useRef<Audio.Sound | null>(null);
-  const loadingRef = useRef(false);
-  // Tracks whether playback reached the end so we know to replay from start
   const didFinishRef = useRef(false);
 
   useEffect(() => {
     soundRef.current = sound;
     return () => {
-      // Unload on a microtask to avoid calling ExoPlayer.release() from
-      // its own status-callback thread (pool-N), which crashes on Android.
       const toUnload = soundRef.current;
       if (toUnload) Promise.resolve().then(() => toUnload.unloadAsync().catch(() => {}));
     };
   }, [sound]);
 
   const onPlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
-    if (status.isLoaded) {
-      setPosition(status.positionMillis);
-      if (status.durationMillis) setDuration(status.durationMillis);
-      if (status.didJustFinish) {
-        // Reset UI — do NOT call stopAsync/unloadAsync here; this callback
-        // runs on ExoPlayer's internal thread and calling ExoPlayer methods
-        // from it throws IllegalStateException on Android.
-        didFinishRef.current = true;
-        setIsPlaying(false);
-        setPosition(0);
-      } else {
-        setIsPlaying(status.isPlaying);
-      }
+    if (!status.isLoaded) return;
+    setPosition(status.positionMillis);
+    if (status.durationMillis) setDuration(status.durationMillis);
+    if (status.didJustFinish) {
+      didFinishRef.current = true;
+      setIsPlaying(false);
+      setPosition(0);
+    } else {
+      setIsPlaying(status.isPlaying);
     }
   }, []);
 
-  // Preload audio silently as soon as the bubble renders.
-  // After load, read duration explicitly via getStatusAsync() — the status
-  // callback alone doesn't always fire with durationMillis on first load.
-  useEffect(() => {
-    if (!uri) return;
-    let mounted = true;
-    loadingRef.current = true;
-
-    Audio.Sound.createAsync(
-      { uri },
-      { shouldPlay: false },
-      onPlaybackStatusUpdate
-    )
-      .then(async ({ sound: preloaded }) => {
-        if (!mounted) {
-          preloaded.unloadAsync().catch(() => {});
-          return;
-        }
-        // Explicitly fetch duration from metadata right after load
-        try {
-          const status = await preloaded.getStatusAsync();
-          if (status.isLoaded && status.durationMillis) {
-            setDuration(status.durationMillis);
-          }
-        } catch {}
-        setSound(preloaded);
-      })
-      .catch(() => {})
-      .finally(() => { loadingRef.current = false; });
-
-    return () => { mounted = false; };
-  }, [uri, onPlaybackStatusUpdate]);
-
   const playPause = async () => {
+    // Already loaded — just play/pause/replay
     if (sound) {
       if (isPlaying) {
+        setIsPlaying(false);
         await sound.pauseAsync();
       } else if (didFinishRef.current || position === 0) {
-        // Replay from start after finishing, or on first tap
         didFinishRef.current = false;
+        setIsPlaying(true);
         await sound.replayAsync();
       } else {
-        // Resume from paused position
+        setIsPlaying(true);
         await sound.playAsync();
       }
-    } else if (!loadingRef.current) {
-      // Preload failed — retry on demand
-      setIsLoading(true);
-      loadingRef.current = true;
-      try {
-        const { sound: newSound } = await Audio.Sound.createAsync(
-          { uri },
-          { shouldPlay: true },
-          onPlaybackStatusUpdate
-        );
-        setSound(newSound);
-      } catch (e) {
-        console.error("Failed to load sound", e);
-      } finally {
-        setIsLoading(false);
-        loadingRef.current = false;
-      }
+      return;
     }
-    // If loadingRef is true: preload still in flight — tap is ignored (< 1s window)
+
+    // Load on first tap
+    setIsLoading(true);
+    try {
+      const { sound: loaded } = await Audio.Sound.createAsync(
+        { uri },
+        { shouldPlay: true, progressUpdateIntervalMillis: 100 },
+        onPlaybackStatusUpdate
+      );
+      try {
+        const status = await loaded.getStatusAsync();
+        if (status.isLoaded && status.durationMillis) {
+          setDuration(status.durationMillis);
+        }
+      } catch {}
+      setSound(loaded);
+    } catch (e) {
+      console.error("Failed to load voice note", e);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const formatTime = (millis: number) => {
@@ -122,6 +88,11 @@ function VoiceNotePlayerComponent({ uri, sent, durationMs }: VoiceNotePlayerProp
   };
 
   const progress = duration > 0 ? position / duration : 0;
+  const iconColor = sent ? PRIMARY_COLOR : "#FFFFFF";
+  const trackColor = sent ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.05)";
+  const fillColor = sent ? "#FFFFFF" : PRIMARY_COLOR;
+  const buttonBg = sent ? "#FFFFFF" : PRIMARY_COLOR;
+  const timeColor = sent ? "#FFFFFF" : "#999999";
 
   return (
     <Box
@@ -132,34 +103,36 @@ function VoiceNotePlayerComponent({ uri, sent, durationMs }: VoiceNotePlayerProp
     >
       <HStack alignItems="center" space="xs">
         <Pressable
-          onPress={playPause}
+          onPress={isLoading ? undefined : playPause}
           w={32} h={32} borderRadius={16}
-          bg={sent ? "#FFFFFF" : PRIMARY_COLOR}
+          bg={buttonBg}
           justifyContent="center" alignItems="center"
         >
           {isLoading ? (
-            <MaterialIcons name="hourglass-empty" size={18} color={sent ? PRIMARY_COLOR : "#FFFFFF"} />
+            <ActivityIndicator size="small" color={iconColor} />
           ) : (
             <MaterialIcons
               name={isPlaying ? "pause" : "play-arrow"}
               size={20}
-              color={sent ? PRIMARY_COLOR : "#FFFFFF"}
+              color={iconColor}
             />
           )}
         </Pressable>
 
         <VStack flex={1} space="xs" justifyContent="center">
-          <Box h={4} bg={sent ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.05)"} borderRadius={2} mx="$1">
+          <Box h={4} bg={trackColor} borderRadius={2} mx="$1">
             <Box
               h="100%"
               w={`${progress * 100}%`}
-              bg={sent ? "#FFFFFF" : PRIMARY_COLOR}
+              bg={fillColor}
               borderRadius={2}
             />
           </Box>
           <HStack justifyContent="space-between" px="$1">
-            <Text fontSize={10} color={sent ? "#FFFFFF" : "#999999"}>{formatTime(position)}</Text>
-            <Text fontSize={10} color={sent ? "#FFFFFF" : "#999999"}>{formatTime(duration)}</Text>
+            <Text fontSize={10} color={timeColor}>{formatTime(position)}</Text>
+            <Text fontSize={10} color={timeColor}>
+              {duration > 0 ? formatTime(duration) : "--:--"}
+            </Text>
           </HStack>
         </VStack>
       </HStack>

@@ -70,6 +70,11 @@ eas build --platform ios --profile preview
 ```
 
 
+### 🐛 Server not starting even after doing all the above steps.
+
+This could happen when network changes, or when a lot of stuffs are running in the background. So just do a hard restart of your PC and try again. I know it's annoying, but it's the only way to fix it. (Unless you have a better idea)
+
+
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
 ## Get a fresh project
