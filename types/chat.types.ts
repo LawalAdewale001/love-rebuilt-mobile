@@ -25,6 +25,7 @@ export type ChatMessage = {
   deleted?: boolean;
   type?: MessageType;
   mediaUrl?: string;
+  durationMs?: number;
   transcription?: string;
   meetup?: {
     title: string;

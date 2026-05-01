@@ -64,6 +64,7 @@ export function emitSendMessage(data: {
   replyToId?: string;
   mediaUrl?: string;
   type?: MessageType;
+  duration?: number;
 }, callback?: (response: any) => void) {
   socket?.emit("sendMessage", data, (response: any) => {
     callback?.(response);
