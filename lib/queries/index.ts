@@ -637,18 +637,18 @@ export function useUpdateDiscoveryPreferencesMutation() {
 }
 
 // --- Location Endpoints ---
-export function useLocationSearchQuery(query: string) {
+export function useLocationSearchQuery(query: string, countryCode: string = "NG") {
   return useQuery({
-    queryKey: ["locationSearch", query],
-    queryFn: () =>
-      apiClient.get<any[]>(`/api/location/search`, {
+    queryKey: ["locationSearch", query, countryCode],
+    queryFn: async () => {
+      const response = await apiClient.get<any>(`/api/location/search`, {
         params: {
           query,
-          // Assuming the backend can accept a 'countries' parameter
-          // "NG" is Nigeria, "GB" is United Kingdom (ISO 3166-1 alpha-2 codes)
-          countries: "NG,GB",
+          countryCode,
         },
-      }),
+      });
+      return response?.data?.result || response?.result || response || [];
+    },
     enabled: query.trim().length > 2,
   });
 }
@@ -657,7 +657,10 @@ export function useLocationSearchQuery(query: string) {
 export function useCurrentLocationQuery(enabled: boolean) {
   return useQuery({
     queryKey: ["currentLocation"],
-    queryFn: () => apiClient.get<{ location: string }>("/api/location/current"),
+    queryFn: async () => {
+      const response = await apiClient.get<any>("/api/location/current");
+      return response?.data?.result || response?.result || response;
+    },
     enabled,
   });
 }

@@ -290,12 +290,12 @@ export default function SignInScreen() {
               {/* Social Login Buttons */}
               <HStack justifyContent="center" space="lg">
                 <Pressable
-                  w={60}
-                  h={60}
+                  w={56}
+                  h={56}
                   bg="#FFFFFF"
-                  borderRadius="$full"
+                  borderRadius="$xl"
                   borderWidth={1}
-                  borderColor="#EAEAEA"
+                  borderColor="#1D1D1D"
                   justifyContent="center"
                   alignItems="center"
                   onPress={() => handleSocialLogin("google")}
@@ -313,31 +313,29 @@ export default function SignInScreen() {
                   )}
                 </Pressable>
 
-                {Platform.OS === "ios" && (
-                  <Pressable
-                    w={60}
-                    h={60}
-                    bg="#FFFFFF"
-                    borderRadius="$full"
-                    borderWidth={1}
-                    borderColor="#EAEAEA"
-                    justifyContent="center"
-                    alignItems="center"
-                    onPress={() => handleSocialLogin("apple")}
-                    disabled={isAnyLoading}
-                  >
-                    {socialLoginMutation.isPending &&
-                    socialLoginMutation.variables?.provider === "apple" ? (
-                      <Spinner size="small" color="#FFFFFF" />
-                    ) : (
-                      <Image
-                        source={require("@/assets/images/apple-icon.png")}
-                        style={{ width: 24, height: 24 }}
-                        contentFit="contain"
-                      />
-                    )}
-                  </Pressable>
-                )}
+                <Pressable
+                  w={56}
+                  h={56}
+                  bg="#FFFFFF"
+                  borderRadius="$xl"
+                  borderWidth={1}
+                  borderColor="#1D1D1D"
+                  justifyContent="center"
+                  alignItems="center"
+                  onPress={() => handleSocialLogin("apple")}
+                  disabled={isAnyLoading}
+                >
+                  {socialLoginMutation.isPending &&
+                  socialLoginMutation.variables?.provider === "apple" ? (
+                    <Spinner size="small" color="#1A1A1A" />
+                  ) : (
+                    <Image
+                      source={require("@/assets/images/apple-icon.png")}
+                      style={{ width: 24, height: 24 }}
+                      contentFit="contain"
+                    />
+                  )}
+                </Pressable>
               </HStack>
 
               {/* Main Action Button */}
