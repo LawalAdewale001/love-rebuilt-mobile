@@ -45,29 +45,34 @@ To ensure the app correctly connects to the local development server when using 
      `[IP_ADDRESS]:[PORT]`
       11.222.89.56:8081
 
-### 📦 Bundling for Development: Dev Client
-````bash
+### 📦 Bundling for Development: Dev Client, just for developers
+```bash
 eas build --platform android --profile development
 eas build --platform all --profile development
 eas build --platform ios --profile development
 ```
 
 
-###  📦 Bundling .apk for Preview
-````bash
+###  📦 Bundling .apk for Preview, This we can send to the Client
+```bash
 eas build --platform android --profile preview
 eas build --platform ios --profile preview
 ```
 
 
 ### 🐛 Server not running
-````bash
+```bash
 1. ipconfig
 2. setx /M REACT_NATIVE_PACKAGER_HOSTNAME 10.84.164.220 [On powershell]
 3. Reopen the terminal
 4. yarn run dev
 5. Scan QR code
 ```
+
+
+### 🐛 Server not starting even after doing all the above steps.
+
+This could happen when network changes, or when a lot of stuffs are running in the background. So just do a hard restart of your PC and try again. I know it's annoying, but it's the only way to fix it. (Unless you have a better idea)
 
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).

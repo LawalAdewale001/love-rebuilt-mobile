@@ -158,7 +158,7 @@ export const ChatMessageBubble = memo(function ChatMessageBubble({
               {/* Audio */}
               {msg.type === MessageType.AUDIO && msg.mediaUrl && (
                 <Box w={200} px="$2" py="$1">
-                  <VoiceNotePlayer uri={msg.mediaUrl} sent={msg.sent} />
+                  <VoiceNotePlayer uri={msg.mediaUrl} sent={msg.sent} durationMs={msg.durationMs} />
                 </Box>
               )}
 

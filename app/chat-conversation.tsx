@@ -277,6 +277,7 @@ export default function ChatConversationScreen() {
         deleted: m.isDeleted,
         type: mappedType,
         mediaUrl: m.mediaUrl || undefined,
+        durationMs: m.duration ? m.duration * 1000 : undefined,
         edited: m.isEdited,
         meetup: m.meetup ? {
           title: m.meetup.title,
@@ -553,12 +554,13 @@ export default function ChatConversationScreen() {
     if (!recordedUri) return;
     if (playbackSound) { await playbackSound.unloadAsync().catch(() => { }); setPlaybackSound(null); }
     setIsPlayingBack(false);
+    const capturedSeconds = recordingSeconds;
     const uri = recordedUri; setRecordedUri(null); setRecordingSeconds(0);
     const result = await upload(uri, `voice_note_${Date.now()}.m4a`, "audio/m4a");
     if (result) {
-      const tempId = addOptimisticMessage({ type: MessageType.AUDIO, mediaUrl: result.fileUrl });
+      const tempId = addOptimisticMessage({ type: MessageType.AUDIO, mediaUrl: result.fileUrl, durationMs: capturedSeconds * 1000 });
       emitSendMessage(
-        { conversationId: effectiveChatId, type: MessageType.AUDIO, mediaUrl: result.fileUrl },
+        { conversationId: effectiveChatId, type: MessageType.AUDIO, mediaUrl: result.fileUrl, duration: capturedSeconds },
         (res) => {
           const realId = res?.id || res?.data?.id || res?.result?.id;
           if (realId) updateMessageId(tempId, realId);

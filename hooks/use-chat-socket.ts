@@ -29,14 +29,33 @@ export function useChatSocket(conversationId: string) {
     // ─── New message
     const onNewMessage = (message: ChatMessage) => {
       if (message.conversationId !== conversationId) return;
-      // Invalidate messages query to refetch
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.messages(conversationId),
-      });
-      // Also invalidate chat list to update last message
+
+      // Insert directly into cache so the message appears immediately —
+      // no network round trip needed.
+      queryClient.setQueryData(
+        queryKeys.messages(conversationId),
+        (oldData: any) => {
+          if (!oldData?.pages?.length) return oldData;
+          // Skip if already present (avoids duplicating sender's own message)
+          const alreadyExists = oldData.pages.some((page: any) =>
+            page.result?.some((m: ChatMessage) => m.id === message.id)
+          );
+          if (alreadyExists) return oldData;
+          const [firstPage, ...rest] = oldData.pages;
+          return {
+            ...oldData,
+            pages: [
+              { ...firstPage, result: [message, ...(firstPage.result ?? [])] },
+              ...rest,
+            ],
+          };
+        }
+      );
+
+      // Invalidate chat list to update the last-message preview
       queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
-      // If the message is from someone else, mark it as read immediately
-      // (the user is actively viewing this conversation)
+
+      // Mark as read since the user is actively viewing this conversation
       if (message.senderId !== currentUserId) {
         emitMarkAsRead(conversationId);
       }
