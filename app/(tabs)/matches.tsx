@@ -13,6 +13,7 @@ import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { Dimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 
 const { width } = Dimensions.get("window");
 
@@ -136,15 +137,16 @@ export default function MatchesScreen() {
                     </HStack>
                   </Box>
 
-                  <Box
-                    position="absolute"
-                    bottom={0}
-                    left={0}
-                    right={0}
-                    h={200}
-                    bg="$black"
-                    opacity={0.6}
-                    zIndex={5}
+                  <LinearGradient
+                    colors={['transparent', 'rgba(0,0,0,0.8)']}
+                    style={{
+                      position: "absolute",
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      height: 250,
+                      zIndex: 5,
+                    }}
                   />
 
                   <VStack

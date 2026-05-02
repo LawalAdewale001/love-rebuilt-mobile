@@ -141,6 +141,7 @@ export default function ChildrenStatusScreen() {
                 borderWidth={1}
                 borderColor={status ? "#1A1A1A" : "$borderLight300"}
                 isReadOnly
+                pointerEvents="none"
               >
                 {status && (
                   <Text
@@ -184,6 +185,7 @@ export default function ChildrenStatusScreen() {
                   borderWidth={1}
                   borderColor={count ? "#1A1A1A" : "$borderLight300"}
                   isReadOnly
+                  pointerEvents="none"
                 >
                   {count && (
                     <Text
@@ -228,6 +230,7 @@ export default function ChildrenStatusScreen() {
                   borderWidth={1}
                   borderColor={location ? "#1A1A1A" : "$borderLight300"}
                   isReadOnly
+                  pointerEvents="none"
                 >
                   {location && (
                     <Text
@@ -272,6 +275,7 @@ export default function ChildrenStatusScreen() {
                   borderWidth={1}
                   borderColor={age ? "#1A1A1A" : "$borderLight300"}
                   isReadOnly
+                  pointerEvents="none"
                 >
                   {age && (
                     <Text

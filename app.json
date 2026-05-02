@@ -29,12 +29,13 @@
       "package": "com.loverebuilt",
       "googleServicesFile": "./google-services.json",
       "permissions": [
-        "CAMERA",
-        "RECORD_AUDIO",
-        "MODIFY_AUDIO_SETTINGS",
-        "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE",
-        "POST_NOTIFICATIONS"
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -113,7 +114,8 @@
             "buildToolsVersion": "36.0.0",
             "enableProguardInReleaseBuilds": true,
             "allowBackup": false,
-            "enableShrinkResourcesInReleaseBuilds": true
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "enableMinifyInReleaseBuilds": true
           }
         }
       ],
@@ -126,14 +128,11 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "1f7db9ca-e929-4d42-b80d-b9da14dfc577"
+        "projectId": "5f29157d-8fb5-49c6-ad06-94df003ed1a7"
       }
     },
     "runtimeVersion": {
       "policy": "appVersion"
-    },
-    "updates": {
-      "url": "https://u.expo.dev/1f7db9ca-e929-4d42-b80d-b9da14dfc577"
     }
   }
 }

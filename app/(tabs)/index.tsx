@@ -21,6 +21,7 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Dimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 
 const { width } = Dimensions.get("window");
 
@@ -266,16 +267,16 @@ export default function DiscoverScreen() {
                   </Box>
 
                   {/* Bottom Gradient */}
-                  <VStack
-                    position="absolute"
-                    bottom={0}
-                    left={0}
-                    right={0}
-                    pt="$20"
-                    pb="$6"
-                    px="$6"
-                    bg="$black"
-                    opacity={0.6}
+                  <LinearGradient
+                    colors={['transparent', 'rgba(0,0,0,0.8)']}
+                    style={{
+                      position: 'absolute',
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      height: 250,
+                      zIndex: 5,
+                    }}
                   />
 
                   {/* Bottom Info Content */}

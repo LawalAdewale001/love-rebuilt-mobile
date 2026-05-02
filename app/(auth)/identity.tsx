@@ -83,6 +83,7 @@ export default function IdentityScreen() {
             borderWidth={1}
             borderColor={selected ? "#1A1A1A" : "$borderLight300"}
             isReadOnly
+            pointerEvents="none"
           >
             <InputField
               value={selected || ""}
