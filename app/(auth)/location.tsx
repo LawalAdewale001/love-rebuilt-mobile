@@ -33,6 +33,7 @@ export default function LocationScreen() {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [selectedLocation, setSelectedLocation] = useState("");
   const [fetchCurrent, setFetchCurrent] = useState(false);
+  const [countryCode, setCountryCode] = useState("NG");
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(searchQuery), 500);
@@ -40,16 +41,17 @@ export default function LocationScreen() {
   }, [searchQuery]);
 
   const { data: searchResults, isLoading } =
-    useLocationSearchQuery(debouncedQuery);
+    useLocationSearchQuery(debouncedQuery, countryCode);
   const { data: currentLocData, isFetching: isFetchingCurrent } =
     useCurrentLocationQuery(fetchCurrent);
 
   useEffect(() => {
-    if (currentLocData?.location) {
-      setSelectedLocation(currentLocData.location);
-      setSearchQuery(currentLocData.location);
+    if (currentLocData) {
+      // The API might return country, countryCode, or country_code.
+      const detectedCountry = currentLocData.countryCode || currentLocData.country_code || currentLocData.country || "NG";
+      setCountryCode(detectedCountry);
       setFetchCurrent(false);
-      showToast("success", "Location Found", currentLocData.location);
+      showToast("success", "Country Selected", `Search restricted to ${detectedCountry}`);
     }
   }, [currentLocData]);
 
@@ -73,6 +75,18 @@ export default function LocationScreen() {
   // Adjust this based on your exact backend response schema!
   const formatLocationDisplay = (loc: any) => {
     if (typeof loc === "string") return loc;
+
+    if (loc.type === "country") {
+      return loc.name;
+    }
+
+    if (loc.name && loc.state && loc.country) {
+      return `${loc.name}, ${loc.state}, ${loc.country}`;
+    }
+
+    if (loc.name && loc.country) {
+      return `${loc.name}, ${loc.country}`;
+    }
 
     // If backend returns distinct fields:
     if (loc.city && loc.state && loc.country) {
@@ -109,7 +123,7 @@ export default function LocationScreen() {
             />
           </InputSlot>
           <InputField
-            placeholder="E.g. Lagos, Nigeria or London, UK"
+            placeholder="Enter Your location"
             value={searchQuery}
             onChangeText={(text) => {
               setSearchQuery(text);
@@ -159,10 +173,11 @@ export default function LocationScreen() {
                 const locName = formatLocationDisplay(loc);
                 const isSelected = selectedLocation === locName;
 
-                // Split for UI display: "City" on top, "State, Country" below
-                const parts = locName.split(",");
-                const mainTitle = parts[0];
-                const subtitle = parts.slice(1).join(",").trim();
+                // Match design: mainTitle is usually the matched query/city (loc.name)
+                // subtitle is the full descriptive string
+                const parts = typeof locName === "string" ? locName.split(",") : [""];
+                const mainTitle = loc?.name || loc?.city || parts[0];
+                const subtitle = loc?.formattedAddress || locName;
 
                 return (
                   <Pressable
@@ -172,21 +187,28 @@ export default function LocationScreen() {
                       setSearchQuery(locName);
                     }}
                   >
-                    <HStack space="md" alignItems="center">
+                    <HStack 
+                      space="md" 
+                      alignItems="flex-start" 
+                      py="$4" 
+                      borderBottomWidth={1} 
+                      borderBottomColor="$borderLight100"
+                    >
                       <Image
                         source={require("@/assets/images/icon-location-pin-pink.png")}
-                        style={{ width: 24, height: 24 }}
+                        style={{ width: 20, height: 20, marginTop: 2 }}
                         contentFit="contain"
                       />
-                      <VStack>
+                      <VStack flex={1}>
                         <Text
-                          fontWeight="$medium"
-                          color={isSelected ? "#E86673" : "$textLight900"}
+                          fontSize={16}
+                          fontWeight="400"
+                          color={isSelected ? "#E86673" : "#1A1A1A"}
                         >
                           {mainTitle}
                         </Text>
-                        {subtitle ? (
-                          <Text color="$textLight500" size="sm">
+                        {subtitle && subtitle !== mainTitle ? (
+                          <Text color="#8F8F8F" fontSize={14} mt={2}>
                             {subtitle}
                           </Text>
                         ) : null}

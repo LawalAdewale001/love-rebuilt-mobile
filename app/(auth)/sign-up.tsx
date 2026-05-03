@@ -305,66 +305,7 @@ export default function SignUpScreen() {
                 </Box>
               </VStack>
 
-              <HStack alignItems="center" space="sm">
-                <Divider flex={1} />
-                <Text color="$textLight400" size="sm">
-                  or
-                </Text>
-                <Divider flex={1} />
-              </HStack>
 
-              {/* Social Login Buttons */}
-              <HStack justifyContent="center" space="lg">
-                <Pressable
-                  w={60}
-                  h={60}
-                  bg="#FFFFFF"
-                  borderRadius="$full"
-                  borderWidth={1}
-                  borderColor="#EAEAEA"
-                  justifyContent="center"
-                  alignItems="center"
-                  onPress={() => handleSocialLogin("google")}
-                  disabled={isAnyLoading}
-                >
-                  {socialLoginMutation.isPending &&
-                  socialLoginMutation.variables?.provider === "google" ? (
-                    <Spinner size="small" color="#1A1A1A" />
-                  ) : (
-                    <Image
-                      source={require("@/assets/images/google-icon.png")}
-                      style={{ width: 24, height: 24 }}
-                      contentFit="contain"
-                    />
-                  )}
-                </Pressable>
-
-                {Platform.OS === "ios" && (
-                  <Pressable
-                    w={60}
-                    h={60}
-                    bg="#FFFFFF"
-                    borderRadius="$full"
-                    borderWidth={1}
-                    borderColor="#EAEAEA"
-                    justifyContent="center"
-                    alignItems="center"
-                    onPress={() => handleSocialLogin("apple")}
-                    disabled={isAnyLoading}
-                  >
-                    {socialLoginMutation.isPending &&
-                    socialLoginMutation.variables?.provider === "apple" ? (
-                      <Spinner size="small" color="#FFFFFF" />
-                    ) : (
-                      <Image
-                        source={require("@/assets/images/apple-icon.png")}
-                        style={{ width: 24, height: 24 }}
-                        contentFit="contain"
-                      />
-                    )}
-                  </Pressable>
-                )}
-              </HStack>
 
               {/* Main Action Button */}
               <Button

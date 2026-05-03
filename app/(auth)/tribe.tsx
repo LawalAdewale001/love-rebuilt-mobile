@@ -81,6 +81,7 @@ export default function TribeScreen() {
             borderWidth={1}
             borderColor={selected ? "#1A1A1A" : "$borderLight300"}
             isReadOnly
+            pointerEvents="none"
           >
             <InputField
               value={selected || ""}
@@ -103,16 +104,25 @@ export default function TribeScreen() {
         </Pressable>
 
         <Box flex={1}>
-          <Image
-            source={require("@/assets/images/tribe-graphic.png")}
-            style={{
-              width: 500,
-              height: 500,
-              position: "absolute",
-              bottom: -50,
-              left: -70,
-            }}
-            contentFit="contain"
+          <Box
+            position="absolute"
+            bottom={-100}
+            left={-50}
+            w={300}
+            h={300}
+            borderRadius={150}
+            bg="#FFF5F6"
+            zIndex={-1}
+          />
+          <Box
+            position="absolute"
+            bottom={-50}
+            right={-50}
+            w={200}
+            h={200}
+            borderRadius={100}
+            bg="#F4F3F2"
+            zIndex={-1}
           />
 
           <Button

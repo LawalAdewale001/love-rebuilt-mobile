@@ -82,6 +82,7 @@ export default function GenderScreen() {
             borderWidth={1}
             borderColor={selected ? "#1A1A1A" : "$borderLight300"}
             isReadOnly
+            pointerEvents="none"
           >
             <InputField
               value={selected?.label || ""}
