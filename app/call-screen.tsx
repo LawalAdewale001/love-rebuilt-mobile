@@ -26,7 +26,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Animated, Dimensions, StatusBar, ActivityIndicator, Alert, PermissionsAndroid, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { RtcSurfaceView, RenderModeType } from "react-native-agora";
+import { RtcSurfaceView, RtcTextureView, RenderModeType } from "react-native-agora";
 import { useCallTokenQuery } from "@/lib/queries";
 import { useAgoraRTC } from "@/hooks/use-agora-rtc";
 import { Audio } from "expo-av";
@@ -416,29 +416,28 @@ export default function CallScreen() {
               <Text color="rgba(255,255,255,0.8)">{statusLabel()}</Text>
             </Box>
 
-            {/* PIP self-view (WhatsApp style: your own camera, top-right corner) */}
-            {callAccepted && (
+            {/* PIP self-view — RtcTextureView renders in the RN layer so it
+                stays above the remote RtcSurfaceView on Android */}
+            {joined && (
               <Animated.View
                 style={{
                   position: "absolute",
-                  top: 60,
+                  bottom: 140,
                   right: 16,
                   transform: [{ scale: pipScale }],
                   width: 110,
                   height: 160,
                   borderRadius: 18,
                   overflow: "hidden",
-                  borderWidth: 2.5,
-                  borderColor: "#FFFFFF",
                   backgroundColor: "#222",
                   shadowColor: "#000",
                   shadowOffset: { width: 0, height: 6 },
-                  shadowOpacity: 0.45,
+                  shadowOpacity: 0.5,
                   shadowRadius: 10,
-                  elevation: 12,
+                  elevation: 20,
                 }}
               >
-                <RtcSurfaceView
+                <RtcTextureView
                   canvas={{ uid: 0, renderMode: RenderModeType.RenderModeHidden }}
                   style={{ width: "100%", height: "100%" }}
                 />
