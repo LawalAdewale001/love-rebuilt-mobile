@@ -45,6 +45,20 @@ To ensure the app correctly connects to the local development server when using 
      `[IP_ADDRESS]:[PORT]`
       11.222.89.56:8081
 
+### 🤖 Local Build with Android Studio
+
+First, generate the native Android project:
+
+```bash
+npx expo prebuild --platform android
+```
+
+Then build and run on a connected device or emulator:
+
+```bash
+npx expo run:android
+```
+
 ### 📦 Bundling for Development: Dev Client, just for developers
 ```bash
 eas build --platform android --profile development

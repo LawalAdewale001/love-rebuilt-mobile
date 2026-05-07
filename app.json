@@ -2,6 +2,7 @@
   "expo": {
     "name": "LoveRebuilt",
     "slug": "love-rebuilt-mobile",
+    "owner": "piuslucky",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/app-icons/ios/AppIcon.appiconset/ItunesArtwork@2x.png",
@@ -128,7 +129,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "5f29157d-8fb5-49c6-ad06-94df003ed1a7"
+        "projectId": "1f7db9ca-e929-4d42-b80d-b9da14dfc577"
       }
     },
     "runtimeVersion": {

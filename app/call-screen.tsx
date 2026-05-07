@@ -393,6 +393,7 @@ export default function CallScreen() {
       <Animated.View style={{ flex: 1, opacity: fadeAnim, transform: [{ scale: scaleAnim }] }}>
         <StatusBar barStyle="light-content" />
 
+        {/* Main fullscreen: remote user's video (WhatsApp style) */}
         {remoteUsers.length > 0 ? (
           <RtcSurfaceView
             canvas={{ uid: remoteUsers[0], renderMode: RenderModeType.RenderModeHidden }}
@@ -400,7 +401,7 @@ export default function CallScreen() {
           />
         ) : (
           <Box position="absolute" width={SCREEN_WIDTH} height={SCREEN_HEIGHT}
-            bg="#000" justifyContent="center" alignItems="center">
+            bg="#1a1a1a" justifyContent="center" alignItems="center">
             <Text color="#FFFFFF">{isOutgoing ? `Calling ${name}...` : `Waiting for ${name}...`}</Text>
           </Box>
         )}
@@ -415,19 +416,32 @@ export default function CallScreen() {
               <Text color="rgba(255,255,255,0.8)">{statusLabel()}</Text>
             </Box>
 
-            {/* PIP self-view */}
+            {/* PIP self-view (WhatsApp style: your own camera, top-right corner) */}
             {callAccepted && (
               <Animated.View
                 style={{
-                  position: "absolute", bottom: 140, right: 20,
+                  position: "absolute",
+                  top: 60,
+                  right: 16,
                   transform: [{ scale: pipScale }],
-                  borderRadius: 12, overflow: "hidden",
-                  shadowColor: "#000", shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.3, shadowRadius: 6, elevation: 8,
-                  width: 100, height: 140, backgroundColor: "#333",
+                  width: 110,
+                  height: 160,
+                  borderRadius: 18,
+                  overflow: "hidden",
+                  borderWidth: 2.5,
+                  borderColor: "#FFFFFF",
+                  backgroundColor: "#222",
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 6 },
+                  shadowOpacity: 0.45,
+                  shadowRadius: 10,
+                  elevation: 12,
                 }}
               >
-                <RtcSurfaceView canvas={{ uid: 0, renderMode: RenderModeType.RenderModeHidden }} style={{ width: "100%", height: "100%" }} />
+                <RtcSurfaceView
+                  canvas={{ uid: 0, renderMode: RenderModeType.RenderModeHidden }}
+                  style={{ width: "100%", height: "100%" }}
+                />
               </Animated.View>
             )}
 

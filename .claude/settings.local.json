@@ -1,7 +1,27 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); deps={**d.get\\('dependencies',{}\\), **d.get\\('devDependencies',{}\\)}; print\\('react-native:', deps.get\\('react-native',''\\)\\); print\\('expo:', deps.get\\('expo',''\\)\\)\")",
+      "Bash(./gradlew.bat app:assembleDebug --stacktrace)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('version',''\\)\\)\")",
+      "Bash(./gradlew.bat --stop)",
+      "Bash(./gradlew.bat app:assembleDebug -x lint -x test --build-cache -PreactNativeDevServerPort=8081 -PreactNativeArchitectures=arm64-v8a,armeabi-v7a)",
+      "Bash(./gradlew.bat app:assembleDebug --info)",
+      "Read(//c/Users/user/.gradle/**)",
+      "Bash(./gradlew.bat app:assembleDebug --no-configure-on-demand -x lint -x test --build-cache -PreactNativeDevServerPort=8081 -PreactNativeArchitectures=arm64-v8a,armeabi-v7a --info)",
+      "Bash(./gradlew.bat app:assembleDebug --no-configure-on-demand -x lint -x test --build-cache -PreactNativeDevServerPort=8081 -PreactNativeArchitectures=arm64-v8a,armeabi-v7a)",
+      "Bash(./gradlew.bat app:assembleDebug --no-configure-on-demand --info)",
+      "Bash(python -c \"import os; p='C:/APJs/LoveRebuilt Mobile/node_modules'; print\\(os.path.realpath\\(p\\)\\)\")",
+      "Read(//c/Users/user/Desktop/WORK PROJECTS/LoveRebuilt/**)",
+      "Bash(echo \"exists: $?\")",
+      "Bash(./gradlew.bat :react-native-gesture-handler:dependencies --no-configure-on-demand --stacktrace)",
+      "Bash(./gradlew.bat :react-native-gesture-handler:dependencies --no-configure-on-demand --info)",
+      "Bash(node -e \"console.log\\(require.resolve\\('react-native-gesture-handler/package.json'\\)\\)\")",
+      "Bash(python -c \"import os; p='C:/APJs/LoveRebuilt Mobile/node_modules/react-native-gesture-handler'; print\\(os.path.realpath\\(p\\)\\)\")",
+      "Read(//c/Users/user/Desktop/WORK PROJECTS/**)",
+      "Bash(python -c \"import json; d=json.load\\(open\\('C:/APJs/LoveRebuilt Mobile/android/build/generated/autolinking/autolinking.json'\\)\\); [print\\(m['name'], '->', m.get\\('androidPackagesDir','N/A'\\)\\) for m in d.get\\('dependencies', []\\)]\")",
+      "Bash(python -c ' *)"
     ]
   }
 }
