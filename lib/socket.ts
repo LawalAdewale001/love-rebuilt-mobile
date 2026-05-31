@@ -87,6 +87,18 @@ export function emitMarkAsRead(conversationId: string) {
   socket?.emit("markAsRead", { conversationId });
 }
 
+// ─── Subscription events
+
+/** Register a one-time subscription:activated listener. Returns a cleanup function. */
+export function onSubscriptionActivated(
+  callback: (data: { plan: string; endDate: string }) => void,
+): () => void {
+  socket?.on('subscription:activated', callback);
+  return () => {
+    socket?.off('subscription:activated', callback);
+  };
+}
+
 // ─── Call signaling
 
 export function emitCallInvite(data: {

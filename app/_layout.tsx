@@ -30,6 +30,7 @@ import "@/lib/api-client-interceptors"; // Registers axios interceptors for prot
 import { getAccessToken, loadAuth } from "@/lib/auth-store";
 import "@/lib/push-notifications"; // Registers setNotificationHandler at module level
 import { queryClient } from "@/lib/query-client";
+import { queryKeys } from "@/lib/queries";
 import { connectSocket, getSocket } from "@/lib/socket";
 
 /**
@@ -75,6 +76,49 @@ function useIncomingCallSocket() {
       register(socket);
     } else {
       // Socket may not be ready yet — poll until it is
+      intervalId = setInterval(() => {
+        const s = getSocket();
+        if (s) {
+          clearInterval(intervalId);
+          register(s);
+        }
+      }, 500);
+    }
+
+    return () => {
+      clearInterval(intervalId);
+      cleanup();
+    };
+  }, []);
+}
+
+/**
+ * Listens for subscription:activated events and immediately refreshes all
+ * subscription-related queries so the UI reflects the new premium status.
+ */
+function useSubscriptionSocket() {
+  useEffect((): (() => void) => {
+    let cleanup: () => void = () => {};
+    let intervalId: ReturnType<typeof setInterval>;
+
+    const register = (socket: ReturnType<typeof getSocket>) => {
+      if (!socket) return;
+
+      const onActivated = (data: { plan: string; endDate: string }) => {
+        console.log("[Socket] subscription:activated", data);
+        queryClient.refetchQueries({ queryKey: queryKeys.subscriptionStatus() });
+        queryClient.refetchQueries({ queryKey: queryKeys.subscriptionPlans() });
+        queryClient.refetchQueries({ queryKey: queryKeys.whoLikedMe() });
+      };
+
+      socket.on("subscription:activated", onActivated);
+      cleanup = () => socket.off("subscription:activated", onActivated);
+    };
+
+    const socket = getSocket();
+    if (socket) {
+      register(socket);
+    } else {
       intervalId = setInterval(() => {
         const s = getSocket();
         if (s) {
@@ -249,6 +293,9 @@ export default function RootLayout() {
   // Global incoming call listener (active for the whole authenticated session)
   useIncomingCallSocket();
 
+  // Refresh subscription data the moment the backend confirms payment
+  useSubscriptionSocket();
+
   // Push notification tap → navigate to the right screen
   // authReady = true only after loadAuth() completes and user is confirmed authenticated
   useNotificationNavigation(authState === "authenticated");
@@ -315,6 +362,13 @@ export default function RootLayout() {
                 options={{ headerShown: false }}
               />
               <Stack.Screen name="settings" options={{ headerShown: false }} />
+              <Stack.Screen
+                name="subscription"
+                options={{
+                  headerShown: false,
+                  presentation: "modal",
+                }}
+              />
               <Stack.Screen
                 name="settings-location"
                 options={{ presentation: "modal", headerShown: false }}

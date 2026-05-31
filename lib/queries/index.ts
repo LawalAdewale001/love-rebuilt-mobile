@@ -32,6 +32,10 @@ export const queryKeys = {
     [...queryKeys.all, "userProfileById", id] as const,
   discoveryGeneral: () => [...queryKeys.all, "discoveryGeneral"] as const,
   discoveryMatches: () => [...queryKeys.all, "discoveryMatches"] as const,
+  subscriptionPlans: () => [...queryKeys.all, "subscriptionPlans"] as const,
+  subscriptionStatus: () => [...queryKeys.all, "subscriptionStatus"] as const,
+  subscriptionHistory: () => [...queryKeys.all, "subscriptionHistory"] as const,
+  whoLikedMe: () => [...queryKeys.all, "whoLikedMe"] as const,
 };
 
 // ─── Auth types
@@ -740,6 +744,97 @@ export function useMiniCourseByIdQuery(id: string) {
       return response?.data?.result || response?.result || response;
     },
     enabled: !!id,
+  });
+}
+
+// ─── Subscription ───────────────────────────────────────────────────────────
+
+export type SubscriptionPlanId = "weekly" | "monthly" | "biannual" | "yearly";
+
+export type PlanInfo = {
+  id: SubscriptionPlanId;
+  label: string;
+  amountKobo: number;
+  amountNaira: number;
+  durationDays: number;
+  description: string;
+  features: string[];
+  isCurrentPlan: boolean;
+};
+
+export type SubscriptionStatus = {
+  isPremium: boolean;
+  plan: SubscriptionPlanId | null;
+  endDate: string | null;
+  startDate: string | null;
+};
+
+export type InitPaymentResponse = {
+  authorizationUrl: string;
+  reference: string;
+  plan: SubscriptionPlanId;
+  amountNaira: number;
+};
+
+export function useSubscriptionPlansQuery() {
+  return useQuery({
+    queryKey: queryKeys.subscriptionPlans(),
+    queryFn: () => apiClient.get<PlanInfo[]>("/api/subscription/plans"),
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+}
+
+export function useSubscriptionStatusQuery() {
+  return useQuery({
+    queryKey: queryKeys.subscriptionStatus(),
+    queryFn: () => apiClient.get<SubscriptionStatus>("/api/subscription/status"),
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+}
+
+export function useInitializePaymentMutation() {
+  return useMutation({
+    mutationFn: (plan: SubscriptionPlanId) =>
+      apiClient.post<InitPaymentResponse>("/api/subscription/initialize", { plan }),
+  });
+}
+
+export function useVerifyPaymentQuery(reference: string, enabled: boolean) {
+  return useQuery({
+    queryKey: [...queryKeys.subscriptionStatus(), "verify", reference],
+    queryFn: () =>
+      apiClient.get<SubscriptionStatus>(`/api/subscription/verify/${reference}`),
+    enabled: enabled && !!reference,
+    staleTime: 0,
+    retry: 2,
+    retryDelay: 2000,
+  });
+}
+
+export function useWhoLikedMeQuery() {
+  return useQuery({
+    queryKey: queryKeys.whoLikedMe(),
+    queryFn: async () => {
+      const response = await apiClient.get<any>("/api/discovery/likes", {
+        params: { page: "1", limit: "20" },
+      });
+      return response?.data?.result || response?.result || [];
+    },
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+}
+
+export function useRewindDislikeMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (targetUserId: string) =>
+      apiClient.post(`/api/discovery/rewind/${targetUserId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.discoveryGeneral() });
+    },
   });
 }
 

@@ -1,8 +1,20 @@
 import { showToast } from "@/components/ui/toast";
 import { PRIMARY_COLOR } from "@/constants/theme";
 import { useS3Upload } from "@/hooks/use-s3-upload";
-import { useProfileQuery, useUpdateProfileMutation } from "@/lib/queries";
+import { useSubscription } from "@/hooks/use-subscription";
+import { useProfileQuery, useUpdateProfileMutation, queryKeys } from "@/lib/queries";
+import { useFocusEffect } from "expo-router";
+import { useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Ionicons } from "@expo/vector-icons";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
+import { Dimensions, StatusBar, StyleSheet, TouchableOpacity } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import {
   Actionsheet,
   ActionsheetBackdrop,
@@ -25,12 +37,6 @@ import {
   TextareaInput,
   VStack,
 } from "@gluestack-ui/themed";
-import { Image } from "expo-image";
-import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
-import { Dimensions, StatusBar } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 
 const { width } = Dimensions.get("window");
 const BOX_SIZE = (width - 48 - 16) / 3;
@@ -85,13 +91,25 @@ const ProfileSection = ({ title, children, onEdit }: any) => (
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
+  const { isPremium, plan, endDate } = useSubscription();
+
+  // Refresh subscription state every time this tab is focused
+  useFocusEffect(
+    useCallback(() => {
+      queryClient.refetchQueries({ queryKey: queryKeys.subscriptionStatus() });
+    }, [queryClient]),
+  );
   const updateMutation = useUpdateProfileMutation();
   const { upload } = useS3Upload();
 
   const { data: profile, isLoading, error } = useProfileQuery();
 
   const [galleryImages, setGalleryImages] = useState<any[]>([]);
+  const [incognitoMode, setIncognitoMode] = useState<boolean>(
+    (profile as any)?.incognitoMode ?? false,
+  );
 
   // --- Direct Edit Modal States ---
   const [activeSheet, setActiveSheet] = useState<
@@ -183,6 +201,20 @@ export default function ProfileScreen() {
         setGalleryImages(profile?.pictures || []);
       }
     }
+  };
+
+  const handleIncognitoToggle = (value: boolean) => {
+    if (!isPremium) {
+      router.push("/subscription" as any);
+      return;
+    }
+    setIncognitoMode(value);
+    updateMutation.mutate({ incognitoMode: value } as any, {
+      onError: () => {
+        setIncognitoMode(!value);
+        showToast("error", "Error", "Failed to update incognito mode.");
+      },
+    });
   };
 
   const removeImage = (indexToRemove: number) => {
@@ -531,6 +563,129 @@ export default function ProfileScreen() {
               )}
             </HStack>
           </ProfileSection>
+
+          {/* ── Privacy & Premium section ── */}
+          <VStack space="md">
+            <Text size="lg" fontWeight="$bold" color="$textLight900">
+              Privacy
+            </Text>
+
+            {/* Incognito mode row */}
+            <Box
+              bg="#F7F5F4"
+              borderRadius="$2xl"
+              px="$4"
+              py="$4"
+              borderWidth={isPremium ? 0 : 1}
+              borderColor={isPremium ? "transparent" : "#FFD6DB"}
+            >
+              <HStack justifyContent="space-between" alignItems="center">
+                <HStack space="sm" alignItems="center" flex={1}>
+                  <Box
+                    w={36}
+                    h={36}
+                    borderRadius="$full"
+                    bg={isPremium ? "#FFF0F2" : "#FFF0F2"}
+                    justifyContent="center"
+                    alignItems="center"
+                  >
+                    <Ionicons
+                      name={isPremium ? "eye-off" : "lock-closed"}
+                      size={16}
+                      color={PRIMARY_COLOR}
+                    />
+                  </Box>
+                  <VStack flex={1}>
+                    <HStack space="xs" alignItems="center">
+                      <Text size="sm" fontWeight="$semibold" color="$textLight900">
+                        Incognito Mode
+                      </Text>
+                      {!isPremium && (
+                        <Box
+                          bg={PRIMARY_COLOR}
+                          px="$2"
+                          py="$0.5"
+                          borderRadius="$full"
+                        >
+                          <Text style={profileStyles.premiumTag}>PREMIUM</Text>
+                        </Box>
+                      )}
+                    </HStack>
+                    <Text size="xs" color="$textLight500" numberOfLines={2}>
+                      {isPremium
+                        ? "Hide your profile from discovery unless you like them first."
+                        : "Upgrade to hide your profile in discovery."}
+                    </Text>
+                  </VStack>
+                </HStack>
+
+                {isPremium ? (
+                  <Switch
+                    size="sm"
+                    value={incognitoMode}
+                    onValueChange={handleIncognitoToggle}
+                    trackColor={{ false: "#E5E7EB", true: PRIMARY_COLOR }}
+                  />
+                ) : (
+                  <TouchableOpacity
+                    onPress={() => router.push("/subscription" as any)}
+                    style={profileStyles.upgradeChip}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={profileStyles.upgradeChipText}>Upgrade</Text>
+                  </TouchableOpacity>
+                )}
+              </HStack>
+            </Box>
+          </VStack>
+
+          {/* ── Premium upgrade banner (non-premium only) ── */}
+          {!isPremium && (
+            <TouchableOpacity
+              activeOpacity={0.88}
+              onPress={() => router.push("/subscription" as any)}
+            >
+              <LinearGradient
+                colors={[PRIMARY_COLOR, "#f17d8a"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={profileStyles.premiumBanner}
+              >
+                <VStack flex={1} space="xs">
+                  <HStack space="xs" alignItems="center">
+                    <Text style={profileStyles.premiumBannerBadge}>👑 PREMIUM</Text>
+                  </HStack>
+                  <Text style={profileStyles.premiumBannerTitle}>
+                    Unlock your full potential
+                  </Text>
+                  <Text style={profileStyles.premiumBannerSub}>
+                    See who likes you · Incognito · Unlimited likes
+                  </Text>
+                </VStack>
+                <Ionicons name="chevron-forward" size={22} color="rgba(255,255,255,0.8)" />
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
+
+          {/* Active plan banner (premium only) */}
+          {isPremium && endDate && (
+            <Box bg="#F0FDF9" borderRadius="$2xl" px="$4" py="$3" borderWidth={1} borderColor="#BBF7D0">
+              <HStack space="sm" alignItems="center">
+                <Text fontSize={20}>✓</Text>
+                <VStack flex={1}>
+                  <Text size="sm" fontWeight="$bold" color="#065F46">
+                    Premium Active — {plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : ""} Plan
+                  </Text>
+                  <Text size="xs" color="#047857">
+                    Renews on {endDate.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
+                  </Text>
+                </VStack>
+                <TouchableOpacity onPress={() => router.push("/subscription" as any)}>
+                  <Text style={{ fontSize: 13, color: "#059669", fontWeight: "700" }}>Manage</Text>
+                </TouchableOpacity>
+              </HStack>
+            </Box>
+          )}
 
           {/* Spacer for bottom nav */}
           <Box h={40} />
@@ -930,3 +1085,46 @@ export default function ProfileScreen() {
     </Box>
   );
 }
+
+const profileStyles = StyleSheet.create({
+  premiumTag: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#fff",
+    letterSpacing: 0.8,
+  },
+  upgradeChip: {
+    backgroundColor: PRIMARY_COLOR,
+    borderRadius: 100,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  upgradeChipText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  premiumBanner: {
+    borderRadius: 20,
+    padding: 20,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  premiumBannerBadge: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.85)",
+    letterSpacing: 1.5,
+  },
+  premiumBannerTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#fff",
+    letterSpacing: -0.3,
+  },
+  premiumBannerSub: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.8)",
+    lineHeight: 17,
+  },
+});

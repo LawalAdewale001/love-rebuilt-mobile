@@ -19,6 +19,7 @@ import {
   SingleStarburstFrame,
   SpeakerIcon,
 } from "@/components/ui/chat-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { PRIMARY_COLOR } from "@/constants/theme";
 import { Box, HStack, Pressable, Text, VStack } from "@gluestack-ui/themed";
 import * as Haptics from "expo-haptics";
@@ -134,7 +135,7 @@ export default function CallScreen() {
   const agoraToken = callAccepted ? (callData?.token || "") : "";
 
   // ── Agora ────────────────────────────────────────────────────────────────────
-  const { joined, remoteUsers, isMuted, isSpeakerOn, toggleMute, toggleSpeaker, leave } =
+  const { joined, remoteUsers, isMuted, isSpeakerOn, isFrontCamera, toggleMute, toggleSpeaker, switchCamera, leave } =
     useAgoraRTC({
       channelName: callData?.channelName || chatId,
       token: agoraToken,
@@ -321,10 +322,24 @@ export default function CallScreen() {
     return "Connecting...";
   };
 
+  // ── Camera flip button (video only) ──────────────────────────────────────────
+  const CameraFlipButton = () => (
+    <Pressable
+      onPress={() => { switchCamera(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+      w={58} h={58} borderRadius={29}
+      bg="rgba(255,255,255,0.18)"
+      borderWidth={1.5} borderColor="rgba(255,255,255,0.35)"
+      justifyContent="center" alignItems="center"
+    >
+      <Ionicons name="camera-reverse-outline" size={26} color="#FFFFFF" />
+    </Pressable>
+  );
+
   // ── Controls row ─────────────────────────────────────────────────────────────
   const controls = (
     <Animated.View style={{ transform: [{ translateY: controlsSlide }], opacity: fadeAnim }}>
       <HStack justifyContent="center" space="xl" px="$8">
+        {isVideo && joined && <CameraFlipButton />}
         <Pressable onPress={toggleSpeaker}>
           <SpeakerIcon size={58} active={isSpeakerOn} />
         </Pressable>

@@ -27,6 +27,7 @@ export function useAgoraRTC({ channelName, token, uid, isVideo, onTokenError }: 
   const [remoteUsers, setRemoteUsers] = useState<number[]>([]);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
+  const [isFrontCamera, setIsFrontCamera] = useState(true);
 
   const init = useCallback(async () => {
     try {
@@ -182,6 +183,13 @@ export function useAgoraRTC({ channelName, token, uid, isVideo, onTokenError }: 
     }
   }, [isSpeakerOn]);
 
+  const switchCamera = useCallback(() => {
+    if (engine.current) {
+      engine.current.switchCamera();
+      setIsFrontCamera((prev) => !prev);
+    }
+  }, []);
+
   useEffect(() => {
     if (channelName && token && uid !== undefined) {
       init();
@@ -196,8 +204,10 @@ export function useAgoraRTC({ channelName, token, uid, isVideo, onTokenError }: 
     remoteUsers,
     isMuted,
     isSpeakerOn,
+    isFrontCamera,
     toggleMute,
     toggleSpeaker,
+    switchCamera,
     leave,
     engine: engine.current,
   };
