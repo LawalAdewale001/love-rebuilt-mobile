@@ -2,18 +2,17 @@ import { showToast } from "@/components/ui/toast";
 import { PRIMARY_COLOR } from "@/constants/theme";
 import { useS3Upload } from "@/hooks/use-s3-upload";
 import { useSubscription } from "@/hooks/use-subscription";
-import { useProfileQuery, useUpdateProfileMutation, queryKeys } from "@/lib/queries";
+import { useProfileQuery, useUpdateProfileMutation, useSyncSubscriptionMutation } from "@/lib/queries";
 import { useFocusEffect } from "expo-router";
-import { useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
-import { Dimensions, StatusBar, StyleSheet, TouchableOpacity } from "react-native";
+import React from "react";
+import { Dimensions, RefreshControl, StatusBar, StyleSheet, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   Actionsheet,
@@ -91,16 +90,28 @@ const ProfileSection = ({ title, children, onEdit }: any) => (
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const queryClient = useQueryClient();
 
-  const { isPremium, plan, endDate } = useSubscription();
+  const { isPremium, plan, endDate, nextPaymentDate, subscriptionStatus } = useSubscription();
+  const syncMutation = useSyncSubscriptionMutation();
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Refresh subscription state every time this tab is focused
+  // Sync live subscription status from Paystack every time the profile tab is focused
   useFocusEffect(
     useCallback(() => {
-      queryClient.refetchQueries({ queryKey: queryKeys.subscriptionStatus() });
-    }, [queryClient]),
+      syncMutation.mutate();
+    }, []),
   );
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await syncMutation.mutateAsync();
+    } catch {
+      /* silent */
+    } finally {
+      setRefreshing(false);
+    }
+  };
   const updateMutation = useUpdateProfileMutation();
   const { upload } = useS3Upload();
 
@@ -264,7 +275,19 @@ export default function ProfileScreen() {
       />
 
       {/* Main Scroll Content */}
-      <ScrollView flex={1} showsVerticalScrollIndicator={false} bounces={false}>
+      <ScrollView
+        flex={1}
+        showsVerticalScrollIndicator={false}
+        bounces={true}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={PRIMARY_COLOR}
+            colors={[PRIMARY_COLOR]}
+          />
+        }
+      >
         {/* --- HERO IMAGE SECTION --- */}
         <Box h={450} w="100%" position="relative">
           <Image
@@ -667,25 +690,51 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           )}
 
-          {/* Active plan banner (premium only) */}
-          {isPremium && endDate && (
-            <Box bg="#F0FDF9" borderRadius="$2xl" px="$4" py="$3" borderWidth={1} borderColor="#BBF7D0">
-              <HStack space="sm" alignItems="center">
-                <Text fontSize={20}>✓</Text>
-                <VStack flex={1}>
-                  <Text size="sm" fontWeight="$bold" color="#065F46">
-                    Premium Active — {plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : ""} Plan
-                  </Text>
-                  <Text size="xs" color="#047857">
-                    Renews on {endDate.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
-                  </Text>
-                </VStack>
-                <TouchableOpacity onPress={() => router.push("/subscription" as any)}>
-                  <Text style={{ fontSize: 13, color: "#059669", fontWeight: "700" }}>Manage</Text>
-                </TouchableOpacity>
-              </HStack>
-            </Box>
-          )}
+          {/* Subscription status banner (premium only) */}
+          {isPremium && (() => {
+            const isCancelled = subscriptionStatus === "non_renewing";
+            const isAttention = subscriptionStatus === "attention";
+            const bg = isCancelled ? "#FFFBEB" : isAttention ? "#FEF2F2" : "#F0FDF9";
+            const border = isCancelled ? "#FDE68A" : isAttention ? "#FECACA" : "#BBF7D0";
+            const titleColor = isCancelled ? "#92400E" : isAttention ? "#991B1B" : "#065F46";
+            const subColor = isCancelled ? "#D97706" : isAttention ? "#DC2626" : "#047857";
+            const manageColor = isCancelled ? "#D97706" : isAttention ? "#DC2626" : "#059669";
+            const icon = isCancelled ? "⏳" : isAttention ? "⚠️" : "✓";
+            const planLabel = plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : "";
+            const title = isCancelled
+              ? `${planLabel} Plan — Cancelled`
+              : isAttention
+                ? `${planLabel} Plan — Payment issue`
+                : `Premium Active — ${planLabel} Plan`;
+            const accessDate = nextPaymentDate ?? endDate;
+            const dateStr = accessDate
+              ? accessDate.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
+              : null;
+            const subLine = isCancelled && dateStr
+              ? `Access until ${dateStr} · No further charges`
+              : isAttention
+                ? "Update your payment card to keep access"
+                : dateStr
+                  ? `Next charge: ${dateStr}`
+                  : null;
+
+            return (
+              <Box bg={bg} borderRadius="$2xl" px="$4" py="$3" borderWidth={1} borderColor={border}>
+                <HStack space="sm" alignItems="center">
+                  <Text fontSize={20}>{icon}</Text>
+                  <VStack flex={1}>
+                    <Text size="sm" fontWeight="$bold" color={titleColor}>{title}</Text>
+                    {subLine && <Text size="xs" color={subColor}>{subLine}</Text>}
+                  </VStack>
+                  <TouchableOpacity onPress={() => router.push("/billing" as any)}>
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: manageColor }}>
+                      {isCancelled || isAttention ? "Details" : "Manage"}
+                    </Text>
+                  </TouchableOpacity>
+                </HStack>
+              </Box>
+            );
+          })()}
 
           {/* Spacer for bottom nav */}
           <Box h={40} />

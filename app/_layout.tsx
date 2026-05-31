@@ -362,6 +362,7 @@ export default function RootLayout() {
                 options={{ headerShown: false }}
               />
               <Stack.Screen name="settings" options={{ headerShown: false }} />
+              <Stack.Screen name="billing" options={{ headerShown: false }} />
               <Stack.Screen
                 name="subscription"
                 options={{

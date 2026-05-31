@@ -35,6 +35,7 @@ export const queryKeys = {
   subscriptionPlans: () => [...queryKeys.all, "subscriptionPlans"] as const,
   subscriptionStatus: () => [...queryKeys.all, "subscriptionStatus"] as const,
   subscriptionHistory: () => [...queryKeys.all, "subscriptionHistory"] as const,
+  billingOverview: () => [...queryKeys.all, "billingOverview"] as const,
   whoLikedMe: () => [...queryKeys.all, "whoLikedMe"] as const,
 };
 
@@ -767,6 +768,31 @@ export type SubscriptionStatus = {
   plan: SubscriptionPlanId | null;
   endDate: string | null;
   startDate: string | null;
+  nextPaymentDate: string | null;
+  subscriptionStatus: string | null;
+};
+
+export type TransactionRecord = {
+  id: string;
+  plan: SubscriptionPlanId;
+  amountNaira: number;
+  reference: string;
+  status: "pending" | "success" | "failed";
+  createdAt: string;
+};
+
+export type CancelSubscriptionResponse = {
+  plan: SubscriptionPlanId | null;
+  accessUntil: string | null;
+  message: string;
+};
+
+export type BillingOverview = {
+  subscription: SubscriptionStatus;
+  recentTransactions: TransactionRecord[];
+  canCancel: boolean;
+  canManage: boolean;
+  cancellationInfo: string | null;
 };
 
 export type InitPaymentResponse = {
@@ -810,6 +836,41 @@ export function useVerifyPaymentQuery(reference: string, enabled: boolean) {
     staleTime: 0,
     retry: 2,
     retryDelay: 2000,
+  });
+}
+
+export function useSyncSubscriptionMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiClient.get<SubscriptionStatus>("/api/subscription/sync"),
+    onSuccess: (data) => {
+      // Write the fresh Paystack data directly into the status cache
+      queryClient.setQueryData(queryKeys.subscriptionStatus(), data);
+      queryClient.invalidateQueries({ queryKey: queryKeys.billingOverview() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.subscriptionPlans() });
+    },
+  });
+}
+
+export function useBillingOverviewQuery() {
+  return useQuery({
+    queryKey: queryKeys.billingOverview(),
+    queryFn: () => apiClient.get<BillingOverview>("/api/subscription/billing"),
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+}
+
+export function useCancelSubscriptionMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiClient.delete<CancelSubscriptionResponse>("/api/subscription/cancel"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.subscriptionStatus() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.billingOverview() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.subscriptionPlans() });
+    },
   });
 }
 

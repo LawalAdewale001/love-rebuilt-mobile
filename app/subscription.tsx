@@ -258,18 +258,32 @@ export default function SubscriptionScreen() {
             See who likes you, go incognito, and get{"\n"}unlimited likes every single day.
           </Text>
 
-          {status?.isPremium && status.endDate && (
-            <View style={styles.activeNotice}>
-              <Text style={styles.activeNoticeText}>
-                ✓ Premium active until{" "}
-                {new Date(status.endDate).toLocaleDateString("en-GB", {
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                })}
-              </Text>
-            </View>
-          )}
+          {status?.isPremium && (() => {
+            const isCancelled = status.subscriptionStatus === "non_renewing";
+            const accessDate = status.nextPaymentDate ?? status.endDate;
+            const dateStr = accessDate
+              ? new Date(accessDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+              : null;
+            const noticeText = isCancelled
+              ? `⏳ Cancelled · access until ${dateStr ?? "next billing date"}`
+              : `✓ Premium active${dateStr ? ` · renews ${dateStr}` : ""}`;
+            return (
+              <View style={styles.activeNoticeRow}>
+                <View style={[styles.activeNotice, isCancelled && styles.activeNoticeCancelled]}>
+                  <Text style={styles.activeNoticeText}>{noticeText}</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => router.push("/billing" as any)}
+                  style={styles.manageBillingBtn}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.manageBillingText}>
+                    {isCancelled ? "View billing details →" : "Manage billing →"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })()}
         </Animated.View>
       </LinearGradient>
 
@@ -298,8 +312,8 @@ export default function SubscriptionScreen() {
           ))}
 
           <Text style={styles.disclaimer}>
-            Payment processed securely via Paystack.{"\n"}
-            Cancel anytime before your plan renews.
+            Card payment only · Recurring billing via Paystack.{"\n"}
+            Cancel anytime from your billing settings.
           </Text>
         </ScrollView>
       )}
@@ -355,18 +369,40 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.85)",
     lineHeight: 22,
   },
-  activeNotice: {
+  activeNoticeRow: {
     marginTop: 16,
+    gap: 8,
+  },
+  activeNotice: {
     backgroundColor: "rgba(255,255,255,0.2)",
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 8,
     alignSelf: "flex-start",
   },
+  activeNoticeCancelled: {
+    backgroundColor: "rgba(253,230,138,0.35)",
+    borderWidth: 1,
+    borderColor: "rgba(253,230,138,0.6)",
+  },
   activeNoticeText: {
     color: "#fff",
     fontSize: 13,
     fontWeight: "600",
+  },
+  manageBillingBtn: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 100,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.35)",
+  },
+  manageBillingText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "700",
   },
   loadingCenter: {
     flex: 1,

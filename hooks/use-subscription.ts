@@ -11,6 +11,8 @@ export function useSubscription() {
     isPremium: data?.isPremium ?? false,
     plan: data?.plan ?? null,
     endDate: data?.endDate ? new Date(data.endDate) : null,
+    nextPaymentDate: data?.nextPaymentDate ? new Date(data.nextPaymentDate) : null,
+    subscriptionStatus: data?.subscriptionStatus ?? null,
     isLoading,
     refetch,
   };
